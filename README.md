@@ -1,0 +1,21 @@
+# Life Hub
+
+App personale Flutter per organizzare giornata, finanze, obiettivi e scadenze.
+
+## Avvio
+
+```sh
+flutter pub get
+flutter run
+```
+
+Scegli Chrome per il web, Windows per il desktop oppure un emulatore Android. Il progetto contiene anche la configurazione iOS, compilabile su macOS con Xcode.
+
+## Struttura
+
+- `lib/models`: modelli indipendenti dall'interfaccia
+- `lib/data`: contratto `AppStore` e persistenza locale
+- `lib/state`: stato e operazioni dell'app
+- `lib/app.dart`: navigazione responsive e pagine
+
+Per una futura sincronizzazione è sufficiente creare una nuova implementazione di `AppStore` (per esempio Supabase o Firebase) senza riscrivere l'interfaccia.
