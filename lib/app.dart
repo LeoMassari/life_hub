@@ -286,6 +286,11 @@ class TodayPage extends StatelessWidget {
                       .map(
                         (e) => CheckboxListTile(
                           contentPadding: EdgeInsets.zero,
+                          secondary: IconButton(
+                            tooltip: 'Elimina',
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: () => s.removeTask(e),
+                          ),
                           value: e.done,
                           onChanged: (_) => s.toggleTask(e),
                           title: Text(
@@ -321,7 +326,17 @@ class TodayPage extends StatelessWidget {
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.notifications_none),
                     title: Text(e.title),
-                    trailing: Text(e.time),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(e.time),
+                        IconButton(
+                          tooltip: 'Elimina',
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () => s.removeReminder(e),
+                        ),
+                      ],
+                    ),
                   ),
                 )
                 .toList(),
@@ -382,12 +397,22 @@ class FinancePage extends StatelessWidget {
                     ),
                     title: Text(e.label),
                     subtitle: Text(_date(e.date)),
-                    trailing: Text(
-                      '${e.amount >= 0 ? '+' : ''}${e.amount.toStringAsFixed(2)} €',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: e.amount >= 0 ? Colors.green : null,
-                      ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${e.amount >= 0 ? '+' : ''}${e.amount.toStringAsFixed(2)} €',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: e.amount >= 0 ? Colors.green : null,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Elimina',
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () => s.removeMovement(e),
+                        ),
+                      ],
                     ),
                   ),
                 )
@@ -435,6 +460,11 @@ class GoalsPage extends StatelessWidget {
                             ),
                           ),
                           Text('${(e.progress * 100).round()}%'),
+                          IconButton(
+                            tooltip: 'Elimina',
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: () => s.removeGoal(e),
+                          ),
                         ],
                       ),
                       Slider(
@@ -487,7 +517,11 @@ class DeadlinesPage extends StatelessWidget {
                     contentPadding: EdgeInsets.zero,
                     value: e.done,
                     onChanged: (_) => s.toggleDeadline(e),
-                    secondary: const Icon(Icons.calendar_month),
+                    secondary: IconButton(
+                      tooltip: 'Elimina',
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () => s.removeDeadline(e),
+                    ),
                     title: Text(e.title),
                     subtitle: Text(_date(e.date)),
                   ),

@@ -88,8 +88,18 @@ class AppState extends ChangeNotifier {
     _changed();
   }
 
+  void removeTask(TaskItem value) {
+    tasks.remove(value);
+    _changed();
+  }
+
   void addReminder(String title, String time) {
     reminders.add(ReminderItem(id: _id(), title: title, time: time));
+    _changed();
+  }
+
+  void removeReminder(ReminderItem value) {
+    reminders.remove(value);
     _changed();
   }
 
@@ -103,11 +113,21 @@ class AppState extends ChangeNotifier {
     _changed();
   }
 
+  void removeDeadline(DeadlineItem value) {
+    deadlines.remove(value);
+    _changed();
+  }
+
   void addMovement(String label, double amount) {
     movements.insert(
       0,
       Movement(id: _id(), label: label, amount: amount, date: DateTime.now()),
     );
+    _changed();
+  }
+
+  void removeMovement(Movement value) {
+    movements.remove(value);
     _changed();
   }
 
@@ -118,6 +138,11 @@ class AppState extends ChangeNotifier {
 
   void setGoal(GoalItem goal, double value) {
     goal.progress = value;
+    _changed();
+  }
+
+  void removeGoal(GoalItem value) {
+    goals.remove(value);
     _changed();
   }
 
