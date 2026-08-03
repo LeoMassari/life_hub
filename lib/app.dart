@@ -3,8 +3,10 @@ import 'data/local_store.dart';
 import 'state/app_state.dart';
 
 class LifeHubApp extends StatefulWidget {
-  const LifeHubApp({super.key, this.store});
+  const LifeHubApp({super.key, this.store, this.cloudEmail, this.onSignOut});
   final AppStore? store;
+  final String? cloudEmail;
+  final Future<void> Function()? onSignOut;
   @override
   State<LifeHubApp> createState() => _LifeHubAppState();
 }
@@ -34,7 +36,11 @@ class _LifeHubAppState extends State<LifeHubApp> {
     theme: _theme(Brightness.light),
     darkTheme: _theme(Brightness.dark),
     home: state.ready
-        ? LifeHubShell(state: state)
+        ? LifeHubShell(
+            state: state,
+            cloudEmail: widget.cloudEmail,
+            onSignOut: widget.onSignOut,
+          )
         : const Scaffold(body: Center(child: CircularProgressIndicator())),
   );
 }
@@ -55,8 +61,15 @@ ThemeData _theme(Brightness b) {
 }
 
 class LifeHubShell extends StatefulWidget {
-  const LifeHubShell({super.key, required this.state});
+  const LifeHubShell({
+    super.key,
+    required this.state,
+    this.cloudEmail,
+    this.onSignOut,
+  });
   final AppState state;
+  final String? cloudEmail;
+  final Future<void> Function()? onSignOut;
   @override
   State<LifeHubShell> createState() => _LifeHubShellState();
 }
@@ -77,7 +90,11 @@ class _LifeHubShellState extends State<LifeHubShell> {
       FinancePage(widget.state),
       GoalsPage(widget.state),
       DeadlinesPage(widget.state),
-      SettingsPage(widget.state),
+      SettingsPage(
+        widget.state,
+        cloudEmail: widget.cloudEmail,
+        onSignOut: widget.onSignOut,
+      ),
     ];
     return LayoutBuilder(
       builder: (c, box) {
@@ -658,8 +675,10 @@ class DeadlinesPage extends StatelessWidget {
 }
 
 class SettingsPage extends StatelessWidget {
-  const SettingsPage(this.s, {super.key});
+  const SettingsPage(this.s, {super.key, this.cloudEmail, this.onSignOut});
   final AppState s;
+  final String? cloudEmail;
+  final Future<void> Function()? onSignOut;
   @override
   Widget build(BuildContext c) => PageBody(
     title: 'Impostazioni',
@@ -675,17 +694,27 @@ class SettingsPage extends StatelessWidget {
           onChanged: s.setDark,
         ),
       ),
-      const Section(
+      Section(
         title: 'Dati e sincronizzazione',
         child: ListTile(
           contentPadding: EdgeInsets.zero,
-          leading: Icon(Icons.cloud_off_outlined),
-          title: Text('Solo locale'),
-          subtitle: Text(
-            'I dati restano sul dispositivo. L’architettura è pronta per collegare un servizio cloud in futuro.',
+          leading: Icon(
+            cloudEmail == null ? Icons.cloud_off_outlined : Icons.cloud_done,
           ),
+          title: Text(cloudEmail == null ? 'Solo locale' : 'Cloud attivo'),
+          subtitle: Text(cloudEmail ?? 'I dati restano su questo dispositivo.'),
         ),
       ),
+      if (onSignOut != null)
+        Section(
+          title: 'Account',
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.logout),
+            title: const Text('Esci dall’account'),
+            onTap: onSignOut,
+          ),
+        ),
     ],
   );
 }
