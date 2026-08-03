@@ -830,11 +830,24 @@ class SettingsPage extends StatelessWidget {
       if (onSignOut != null)
         Section(
           title: 'Account',
-          child: ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.logout),
-            title: const Text('Esci dall’account'),
-            onTap: onSignOut,
+          child: Column(
+            children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.account_circle_outlined),
+                title: Text(cloudEmail ?? 'Account personale'),
+                subtitle: const Text(
+                  'I dati di questo account sono separati dagli altri.',
+                ),
+              ),
+              const Divider(),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.logout),
+                title: const Text('Esci dall’account'),
+                onTap: onSignOut,
+              ),
+            ],
           ),
         ),
     ],
