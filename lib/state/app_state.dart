@@ -12,6 +12,10 @@ class AppState extends ChangeNotifier {
   List<DeadlineItem> deadlines = [];
   List<Movement> movements = [];
   List<GoalItem> goals = [];
+  List<BookItem> books = [];
+  List<CycleItem> cycleItems = [];
+  List<CalendarItem> calendarItems = [];
+  List<ProjectItem> projects = [];
   String _id() => DateTime.now().microsecondsSinceEpoch.toString();
 
   Future<void> init() async {
@@ -49,21 +53,34 @@ class AppState extends ChangeNotifier {
       ];
       await _save();
     } else {
-      tasks = (j['tasks'] as List)
-          .map((e) => TaskItem.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
-      reminders = (j['reminders'] as List)
+      List<dynamic> items(String key) => j[key] as List<dynamic>? ?? const [];
+      tasks = items(
+        'tasks',
+      ).map((e) => TaskItem.fromJson(Map<String, dynamic>.from(e))).toList();
+      reminders = items('reminders')
           .map((e) => ReminderItem.fromJson(Map<String, dynamic>.from(e)))
           .toList();
-      deadlines = (j['deadlines'] as List)
+      deadlines = items('deadlines')
           .map((e) => DeadlineItem.fromJson(Map<String, dynamic>.from(e)))
           .toList();
-      movements = (j['movements'] as List)
-          .map((e) => Movement.fromJson(Map<String, dynamic>.from(e)))
+      movements = items(
+        'movements',
+      ).map((e) => Movement.fromJson(Map<String, dynamic>.from(e))).toList();
+      goals = items(
+        'goals',
+      ).map((e) => GoalItem.fromJson(Map<String, dynamic>.from(e))).toList();
+      books = items(
+        'books',
+      ).map((e) => BookItem.fromJson(Map<String, dynamic>.from(e))).toList();
+      cycleItems = items(
+        'cycleItems',
+      ).map((e) => CycleItem.fromJson(Map<String, dynamic>.from(e))).toList();
+      calendarItems = items('calendarItems')
+          .map((e) => CalendarItem.fromJson(Map<String, dynamic>.from(e)))
           .toList();
-      goals = (j['goals'] as List)
-          .map((e) => GoalItem.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
+      projects = items(
+        'projects',
+      ).map((e) => ProjectItem.fromJson(Map<String, dynamic>.from(e))).toList();
       darkMode = j['darkMode'] ?? false;
     }
     ready = true;
@@ -76,6 +93,10 @@ class AppState extends ChangeNotifier {
     'deadlines': deadlines.map((e) => e.toJson()).toList(),
     'movements': movements.map((e) => e.toJson()).toList(),
     'goals': goals.map((e) => e.toJson()).toList(),
+    'books': books.map((e) => e.toJson()).toList(),
+    'cycleItems': cycleItems.map((e) => e.toJson()).toList(),
+    'calendarItems': calendarItems.map((e) => e.toJson()).toList(),
+    'projects': projects.map((e) => e.toJson()).toList(),
     'darkMode': darkMode,
   });
   void addTask(String v) {
@@ -85,6 +106,11 @@ class AppState extends ChangeNotifier {
 
   void toggleTask(TaskItem v) {
     v.done = !v.done;
+    _changed();
+  }
+
+  void updateTaskTitle(TaskItem task, String title) {
+    task.title = title;
     _changed();
   }
 
@@ -143,6 +169,99 @@ class AppState extends ChangeNotifier {
 
   void removeGoal(GoalItem value) {
     goals.remove(value);
+    _changed();
+  }
+
+  void addBook(String title) {
+    books.add(BookItem(id: _id(), title: title));
+    _changed();
+  }
+
+  void updateBook(BookItem book, String title) {
+    book.title = title;
+    _changed();
+  }
+
+  void removeBook(BookItem book) {
+    books.remove(book);
+    _changed();
+  }
+
+  void reorderBooks(int oldIndex, int newIndex) {
+    final book = books.removeAt(oldIndex);
+    books.insert(newIndex, book);
+    _changed();
+  }
+
+  void addCycleItem(String title) {
+    cycleItems.add(CycleItem(id: _id(), title: title));
+    _changed();
+  }
+
+  void updateCycleItem(CycleItem item, String title) {
+    item.title = title;
+    _changed();
+  }
+
+  void removeCycleItem(CycleItem item) {
+    cycleItems.remove(item);
+    _changed();
+  }
+
+  void addCalendarItem(String title, DateTime date) {
+    calendarItems.add(CalendarItem(id: _id(), title: title, date: date));
+    _changed();
+  }
+
+  void updateCalendarItem(CalendarItem item, String title, DateTime date) {
+    item.title = title;
+    item.date = date;
+    _changed();
+  }
+
+  void toggleCalendarItem(CalendarItem item) {
+    item.done = !item.done;
+    _changed();
+  }
+
+  void removeCalendarItem(CalendarItem item) {
+    calendarItems.remove(item);
+    _changed();
+  }
+
+  void addProject(String title) {
+    projects.add(ProjectItem(id: _id(), title: title));
+    _changed();
+  }
+
+  void updateProject(ProjectItem project, String title) {
+    project.title = title;
+    _changed();
+  }
+
+  void removeProject(ProjectItem project) {
+    projects.remove(project);
+    _changed();
+  }
+
+  void addProjectTask(ProjectItem project, String title, DateTime? deadline) {
+    project.tasks.add(ProjectTask(id: _id(), title: title, deadline: deadline));
+    _changed();
+  }
+
+  void updateProjectTask(ProjectTask task, String title, DateTime? deadline) {
+    task.title = title;
+    task.deadline = deadline;
+    _changed();
+  }
+
+  void toggleProjectTask(ProjectTask task) {
+    task.done = !task.done;
+    _changed();
+  }
+
+  void removeProjectTask(ProjectItem project, ProjectTask task) {
+    project.tasks.remove(task);
     _changed();
   }
 

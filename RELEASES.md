@@ -5,6 +5,25 @@ Ogni aggiornamento completato produce due archivi nella cartella `releases/`:
 - `life_hub-source-vX.Y.Z.zip`: progetto Flutter completo, senza cronologia Git o file temporanei;
 - `life_hub-web-vX.Y.Z.zip`: applicazione web compilata, pronta per essere pubblicata su un servizio di hosting.
 
+## 0.6.0
+
+- nuovo menu Altro per mantenere semplice la navigazione;
+- pagine Allenamento e Alimentazione predisposte come work in progress;
+- coda di lettura ordinabile nella pagina Studio;
+- inbox Cicli per raccogliere elementi da smistare;
+- calendario mensile con attività giornaliere;
+- progetti con sotto-attività, scadenze e avanzamento automatico;
+- modifica del nome delle attività in Oggi;
+- Panoramica spostata in fondo alla pagina Oggi;
+- piena compatibilità con i dati salvati dalle versioni precedenti.
+
+## 0.5.0
+
+- accesso con account email e password;
+- dati locali separati per utente;
+- migrazione sicura dei dati preesistenti al primo account;
+- sincronizzazione cloud personale tramite Supabase.
+
 ## 0.4.0
 
 - nuova dashboard Oggi con saldo, prossima scadenza e obiettivi;

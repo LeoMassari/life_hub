@@ -1,6 +1,7 @@
 # Life Hub
 
-App personale Flutter per organizzare giornata, finanze, obiettivi e scadenze.
+App personale Flutter per organizzare giornata, finanze, obiettivi, progetti,
+letture, appunti da smistare e calendario.
 
 ## Avvio
 
@@ -17,6 +18,9 @@ Scegli Chrome per il web, Windows per il desktop oppure un emulatore Android. Il
 - `lib/data`: contratto `AppStore` e persistenza locale
 - `lib/state`: stato e operazioni dell'app
 - `lib/app.dart`: navigazione responsive e pagine
+
+Le aree principali sono Oggi, Finanze, Obiettivi e Scadenze. Il menu **Altro**
+raccoglie Allenamento, Alimentazione, Studio, Cicli, Calendario e Impostazioni.
 
 Per una futura sincronizzazione è sufficiente creare una nuova implementazione di `AppStore` (per esempio Supabase o Firebase) senza riscrivere l'interfaccia.
 

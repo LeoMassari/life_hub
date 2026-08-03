@@ -84,3 +84,115 @@ class GoalItem {
     progress: (j['progress'] as num?)?.toDouble() ?? 0,
   );
 }
+
+class BookItem {
+  BookItem({required this.id, required this.title});
+
+  final String id;
+  String title;
+
+  Map<String, dynamic> toJson() => {'id': id, 'title': title};
+
+  factory BookItem.fromJson(Map<String, dynamic> json) =>
+      BookItem(id: json['id'] as String, title: json['title'] as String);
+}
+
+class CycleItem {
+  CycleItem({required this.id, required this.title});
+
+  final String id;
+  String title;
+
+  Map<String, dynamic> toJson() => {'id': id, 'title': title};
+
+  factory CycleItem.fromJson(Map<String, dynamic> json) =>
+      CycleItem(id: json['id'] as String, title: json['title'] as String);
+}
+
+class CalendarItem {
+  CalendarItem({
+    required this.id,
+    required this.title,
+    required this.date,
+    this.done = false,
+  });
+
+  final String id;
+  String title;
+  DateTime date;
+  bool done;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'date': date.toIso8601String(),
+    'done': done,
+  };
+
+  factory CalendarItem.fromJson(Map<String, dynamic> json) => CalendarItem(
+    id: json['id'] as String,
+    title: json['title'] as String,
+    date: DateTime.parse(json['date'] as String),
+    done: json['done'] as bool? ?? false,
+  );
+}
+
+class ProjectTask {
+  ProjectTask({
+    required this.id,
+    required this.title,
+    this.deadline,
+    this.done = false,
+  });
+
+  final String id;
+  String title;
+  DateTime? deadline;
+  bool done;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'deadline': deadline?.toIso8601String(),
+    'done': done,
+  };
+
+  factory ProjectTask.fromJson(Map<String, dynamic> json) => ProjectTask(
+    id: json['id'] as String,
+    title: json['title'] as String,
+    deadline: json['deadline'] == null
+        ? null
+        : DateTime.parse(json['deadline'] as String),
+    done: json['done'] as bool? ?? false,
+  );
+}
+
+class ProjectItem {
+  ProjectItem({required this.id, required this.title, List<ProjectTask>? tasks})
+    : tasks = tasks ?? [];
+
+  final String id;
+  String title;
+  final List<ProjectTask> tasks;
+
+  double get progress => tasks.isEmpty
+      ? 0
+      : tasks.where((task) => task.done).length / tasks.length;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'tasks': tasks.map((task) => task.toJson()).toList(),
+  };
+
+  factory ProjectItem.fromJson(Map<String, dynamic> json) => ProjectItem(
+    id: json['id'] as String,
+    title: json['title'] as String,
+    tasks: (json['tasks'] as List<dynamic>? ?? const [])
+        .map(
+          (task) =>
+              ProjectTask.fromJson(Map<String, dynamic>.from(task as Map)),
+        )
+        .toList(),
+  );
+}
