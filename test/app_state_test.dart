@@ -31,4 +31,53 @@ void main() {
     expect(restored.movements.any((item) => item.label == 'Cinema'), isTrue);
     expect(restored.reminders.any((item) => item.time == '18:30'), isTrue);
   });
+
+  test('carica una versione precedente senza i nuovi campi', () async {
+    final store = MemoryStore()
+      ..value = {
+        'tasks': <Object>[],
+        'reminders': <Object>[],
+        'deadlines': <Object>[],
+        'movements': <Object>[],
+        'goals': <Object>[],
+        'darkMode': false,
+      };
+
+    final state = AppState(store);
+    await state.init();
+
+    expect(state.books, isEmpty);
+    expect(state.cycleItems, isEmpty);
+    expect(state.calendarItems, isEmpty);
+    expect(state.projects, isEmpty);
+  });
+
+  test('salva libri, calendario e progetti con sotto-attività', () async {
+    final store = MemoryStore();
+    final state = AppState(store);
+    await state.init();
+
+    state.addBook('Il nome della rosa');
+    state.addBook('Dune');
+    state.reorderBooks(1, 0);
+    state.addCycleItem('Organizzare il viaggio');
+    state.addCalendarItem('Dentista', DateTime(2026, 9, 12));
+    state.addProject('Casa');
+    state.addProjectTask(
+      state.projects.first,
+      'Chiedere un preventivo',
+      DateTime(2026, 10, 1),
+    );
+    state.toggleProjectTask(state.projects.first.tasks.first);
+    await Future<void>.delayed(Duration.zero);
+
+    final restored = AppState(store);
+    await restored.init();
+
+    expect(restored.books.first.title, 'Dune');
+    expect(restored.cycleItems.single.title, 'Organizzare il viaggio');
+    expect(restored.calendarItems.single.title, 'Dentista');
+    expect(restored.projects.single.progress, 1);
+    expect(restored.projects.single.tasks.single.deadline, isNotNull);
+  });
 }
