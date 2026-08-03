@@ -236,6 +236,26 @@ Future<String?> _textDialog(BuildContext c, String title, {String hint = ''}) {
   );
 }
 
+Future<bool> _confirmDelete(BuildContext context, String name) async =>
+    await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminare questo elemento?'),
+        content: Text(name),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annulla'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Elimina'),
+          ),
+        ],
+      ),
+    ) ??
+    false;
+
 String _date(DateTime d) =>
     '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
@@ -289,7 +309,11 @@ class TodayPage extends StatelessWidget {
                           secondary: IconButton(
                             tooltip: 'Elimina',
                             icon: const Icon(Icons.delete_outline),
-                            onPressed: () => s.removeTask(e),
+                            onPressed: () async {
+                              if (await _confirmDelete(c, e.title)) {
+                                s.removeTask(e);
+                              }
+                            },
                           ),
                           value: e.done,
                           onChanged: (_) => s.toggleTask(e),
@@ -333,7 +357,11 @@ class TodayPage extends StatelessWidget {
                         IconButton(
                           tooltip: 'Elimina',
                           icon: const Icon(Icons.delete_outline),
-                          onPressed: () => s.removeReminder(e),
+                          onPressed: () async {
+                            if (await _confirmDelete(c, e.title)) {
+                              s.removeReminder(e);
+                            }
+                          },
                         ),
                       ],
                     ),
@@ -377,10 +405,12 @@ class FinancePage extends StatelessWidget {
                 hint: 'Descrizione, importo (es. Caffè, -1.50)',
               );
               if (v != null) {
-                final p = v.split(',');
-                if (p.length > 1) {
-                  final n = double.tryParse(p.last.trim().replaceAll(',', '.'));
-                  if (n != null) s.addMovement(p.first.trim(), n);
+                final separator = v.indexOf(',');
+                if (separator > 0) {
+                  final label = v.substring(0, separator).trim();
+                  final rawAmount = v.substring(separator + 1).trim();
+                  final n = double.tryParse(rawAmount.replaceAll(',', '.'));
+                  if (label.isNotEmpty && n != null) s.addMovement(label, n);
                 }
               }
             },
@@ -410,7 +440,11 @@ class FinancePage extends StatelessWidget {
                         IconButton(
                           tooltip: 'Elimina',
                           icon: const Icon(Icons.delete_outline),
-                          onPressed: () => s.removeMovement(e),
+                          onPressed: () async {
+                            if (await _confirmDelete(c, e.label)) {
+                              s.removeMovement(e);
+                            }
+                          },
                         ),
                       ],
                     ),
@@ -463,7 +497,11 @@ class GoalsPage extends StatelessWidget {
                           IconButton(
                             tooltip: 'Elimina',
                             icon: const Icon(Icons.delete_outline),
-                            onPressed: () => s.removeGoal(e),
+                            onPressed: () async {
+                              if (await _confirmDelete(c, e.title)) {
+                                s.removeGoal(e);
+                              }
+                            },
                           ),
                         ],
                       ),
@@ -520,7 +558,11 @@ class DeadlinesPage extends StatelessWidget {
                     secondary: IconButton(
                       tooltip: 'Elimina',
                       icon: const Icon(Icons.delete_outline),
-                      onPressed: () => s.removeDeadline(e),
+                      onPressed: () async {
+                        if (await _confirmDelete(c, e.title)) {
+                          s.removeDeadline(e);
+                        }
+                      },
                     ),
                     title: Text(e.title),
                     subtitle: Text(_date(e.date)),
