@@ -1,12 +1,14 @@
 {
-    "name": "life_hub",
-    "short_name": "life_hub",
+    "id": "life-hub",
+    "name": "Life Hub — La tua vita organizzata",
+    "short_name": "Life Hub",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#F7F7FB",
+    "theme_color": "#6558D3",
+    "description": "Attività, promemoria, finanze, obiettivi e scadenze in un unico posto.",
+    "orientation": "any",
+    "categories": ["productivity", "finance", "lifestyle"],
     "prefer_related_applications": false,
     "icons": [
         {
@@ -23,13 +25,13 @@
             "src": "icons/Icon-maskable-192.png",
             "sizes": "192x192",
             "type": "image/png",
-            "purpose": "maskable"
+            "purpose": "any maskable"
         },
         {
             "src": "icons/Icon-maskable-512.png",
             "sizes": "512x512",
             "type": "image/png",
-            "purpose": "maskable"
+            "purpose": "any maskable"
         }
     ]
 }
