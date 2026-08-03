@@ -19,3 +19,5 @@ Scegli Chrome per il web, Windows per il desktop oppure un emulatore Android. Il
 - `lib/app.dart`: navigazione responsive e pagine
 
 Per una futura sincronizzazione è sufficiente creare una nuova implementazione di `AppStore` (per esempio Supabase o Firebase) senza riscrivere l'interfaccia.
+
+La base Supabase è già inclusa. Consulta [docs/cloud_setup.md](docs/cloud_setup.md) per collegare un progetto personale in sicurezza.
