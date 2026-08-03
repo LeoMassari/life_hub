@@ -16,8 +16,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Oggi'), findsWidgets);
     expect(find.text('Finanze'), findsOneWidget);
-    expect(find.text('Obiettivi'), findsOneWidget);
+    expect(find.text('Obiettivi'), findsWidgets);
     expect(find.text('Scadenze'), findsOneWidget);
     expect(find.text('Impostazioni'), findsOneWidget);
+    expect(find.text('Panoramica'), findsOneWidget);
+    expect(find.text('Saldo'), findsOneWidget);
   });
 }

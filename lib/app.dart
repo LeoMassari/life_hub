@@ -356,16 +356,136 @@ Future<({String label, double amount})?> _movementDialog(
 String _date(DateTime d) =>
     '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
+int _daysUntil(DateTime date) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final target = DateTime(date.year, date.month, date.day);
+  return target.difference(today).inDays;
+}
+
+String _deadlineStatus(DateTime date) {
+  final days = _daysUntil(date);
+  if (days < 0) return 'Scaduta da ${-days} giorni';
+  if (days == 0) return 'Scade oggi';
+  if (days == 1) return 'Scade domani';
+  return 'Tra $days giorni';
+}
+
+class MetricCard extends StatelessWidget {
+  const MetricCard({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 210,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Row(
+      children: [
+        CircleAvatar(child: Icon(icon)),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 3),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 class TodayPage extends StatelessWidget {
   const TodayPage(this.s, {super.key});
   final AppState s;
   @override
   Widget build(BuildContext c) {
     final done = s.tasks.where((e) => e.done).length;
+    final balance = s.movements.fold<double>(
+      0,
+      (sum, item) => sum + item.amount,
+    );
+    final activeDeadlines = s.deadlines.where((item) => !item.done).toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+    final nextDeadline = activeDeadlines.firstOrNull;
+    final goalProgress = s.goals.isEmpty
+        ? 0
+        : s.goals.fold<double>(0, (sum, item) => sum + item.progress) /
+              s.goals.length;
+    final urgent = activeDeadlines
+        .where((item) => _daysUntil(item.date) <= 7)
+        .take(3)
+        .toList();
     return PageBody(
       title: 'Oggi',
       subtitle: 'La tua giornata a colpo d’occhio',
       children: [
+        Section(
+          title: 'Panoramica',
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              MetricCard(
+                icon: Icons.account_balance_wallet_outlined,
+                label: 'Saldo',
+                value: '${balance.toStringAsFixed(2)} €',
+              ),
+              MetricCard(
+                icon: Icons.event_outlined,
+                label: 'Prossima scadenza',
+                value: nextDeadline?.title ?? 'Nessuna',
+              ),
+              MetricCard(
+                icon: Icons.flag_outlined,
+                label: 'Obiettivi',
+                value: '${(goalProgress * 100).round()}% completati',
+              ),
+            ],
+          ),
+        ),
+        if (urgent.isNotEmpty)
+          Section(
+            title: 'Richiede attenzione',
+            child: Column(
+              children: urgent
+                  .map(
+                    (item) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        _daysUntil(item.date) < 0
+                            ? Icons.error_outline
+                            : Icons.schedule,
+                        color: _daysUntil(item.date) <= 1
+                            ? Theme.of(c).colorScheme.error
+                            : null,
+                      ),
+                      title: Text(item.title),
+                      subtitle: Text(_deadlineStatus(item.date)),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
         Section(
           title: 'Progresso',
           child: Column(
@@ -524,7 +644,9 @@ class FinancePage extends StatelessWidget {
                       ),
                     ),
                     title: Text(e.label),
-                    subtitle: Text(_date(e.date)),
+                    subtitle: Text(
+                      '${_date(e.date)} · ${_deadlineStatus(e.date)}',
+                    ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [

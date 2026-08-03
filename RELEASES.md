@@ -5,6 +5,13 @@ Ogni aggiornamento completato produce due archivi nella cartella `releases/`:
 - `life_hub-source-vX.Y.Z.zip`: progetto Flutter completo, senza cronologia Git o file temporanei;
 - `life_hub-web-vX.Y.Z.zip`: applicazione web compilata, pronta per essere pubblicata su un servizio di hosting.
 
+## 0.4.0
+
+- nuova dashboard Oggi con saldo, prossima scadenza e obiettivi;
+- sezione Richiede attenzione per scadenze imminenti o già scadute;
+- indicazioni temporali leggibili nelle scadenze;
+- layout responsive delle metriche.
+
 ## 0.3.0
 
 - configurazione PWA installabile da Safari sulla schermata Home;
