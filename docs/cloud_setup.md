@@ -1,9 +1,10 @@
 # Configurazione cloud Supabase
 
 1. Crea un progetto Supabase chiamato `life-hub`.
-2. Apri **SQL Editor**, incolla `supabase/migrations/001_life_hub_data.sql` ed eseguilo.
-3. Recupera **Project URL** e **Publishable key** dal pannello **Connect**.
-4. Avvia l'app passando i valori senza salvarli nel repository:
+2. In **Authentication > Providers** lascia attivo il provider Email.
+3. Apri **SQL Editor**, incolla `supabase/migrations/001_life_hub_data.sql` ed eseguilo.
+4. Recupera **Project URL** e **Publishable key** dal pannello **Connect**.
+5. Avvia l'app passando i valori senza salvarli nel repository:
 
 ```sh
 flutter run \
@@ -13,4 +14,15 @@ flutter run \
 
 Non usare mai una `secret key` o la password del database dentro l'app.
 
-La tabella usa Row Level Security: un utente autenticato può leggere e modificare esclusivamente la propria riga. Il prossimo passaggio collegherà accesso via email, migrazione iniziale dei dati locali e aggiornamenti in tempo reale.
+Per la versione pubblicata su GitHub Pages, salva gli stessi valori nei GitHub
+Actions Secrets `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_KEY`, quindi rilancia il
+workflow **Pubblica Life Hub Web**.
+
+La tabella usa Row Level Security: un utente autenticato può leggere e
+modificare esclusivamente la propria riga. Anche la cache del browser è separata
+per ID utente; i dati locali preesistenti vengono assegnati soltanto al primo
+account utilizzato su quel dispositivo.
+
+Con la conferma email attiva, ogni persona deve aprire il collegamento ricevuto
+da Supabase prima del primo accesso. Per una prima prova privata puoi disattivare
+temporaneamente **Confirm email** nelle impostazioni del provider Email.
