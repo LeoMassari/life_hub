@@ -199,6 +199,8 @@ class Section extends StatelessWidget {
                     ),
                   ),
                 ),
+                // Dart versions before null-aware collection elements need this form.
+                // ignore: use_null_aware_elements
                 if (action != null) action!,
               ],
             ),
@@ -255,6 +257,84 @@ Future<bool> _confirmDelete(BuildContext context, String name) async =>
       ),
     ) ??
     false;
+
+Future<({String label, double amount})?> _movementDialog(
+  BuildContext context,
+) async {
+  final labelController = TextEditingController();
+  final amountController = TextEditingController();
+  var isIncome = false;
+  String? error;
+  final result = await showDialog<({String label, double amount})>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: const Text('Nuovo movimento'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(value: false, label: Text('Uscita')),
+                ButtonSegment(value: true, label: Text('Entrata')),
+              ],
+              selected: {isIncome},
+              onSelectionChanged: (value) =>
+                  setDialogState(() => isIncome = value.first),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: labelController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Descrizione',
+                hintText: 'Es. Spesa settimanale',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: amountController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: InputDecoration(
+                labelText: 'Importo',
+                suffixText: '€',
+                errorText: error,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final label = labelController.text.trim();
+              final parsed = double.tryParse(
+                amountController.text.trim().replaceAll(',', '.'),
+              );
+              if (label.isEmpty || parsed == null || parsed <= 0) {
+                setDialogState(() => error = 'Inserisci un importo valido');
+                return;
+              }
+              Navigator.pop(context, (
+                label: label,
+                amount: isIncome ? parsed : -parsed,
+              ));
+            },
+            child: const Text('Salva'),
+          ),
+        ],
+      ),
+    ),
+  );
+  labelController.dispose();
+  amountController.dispose();
+  return result;
+}
 
 String _date(DateTime d) =>
     '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
@@ -340,7 +420,18 @@ class TodayPage extends StatelessWidget {
                 'Nuovo promemoria',
                 hint: 'Es. Prendere le vitamine',
               );
-              if (v?.isNotEmpty == true) s.addReminder(v!, 'Oggi');
+              if (v?.isNotEmpty == true) {
+                if (!c.mounted) return;
+                final time = await showTimePicker(
+                  context: c,
+                  initialTime: TimeOfDay.now(),
+                );
+                if (time != null) {
+                  final formatted =
+                      '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+                  s.addReminder(v!, formatted);
+                }
+              }
             },
           ),
           child: Column(
@@ -399,19 +490,9 @@ class FinancePage extends StatelessWidget {
           action: IconButton(
             icon: const Icon(Icons.add),
             onPressed: () async {
-              final v = await _textDialog(
-                c,
-                'Nuovo movimento',
-                hint: 'Descrizione, importo (es. Caffè, -1.50)',
-              );
-              if (v != null) {
-                final separator = v.indexOf(',');
-                if (separator > 0) {
-                  final label = v.substring(0, separator).trim();
-                  final rawAmount = v.substring(separator + 1).trim();
-                  final n = double.tryParse(rawAmount.replaceAll(',', '.'));
-                  if (label.isNotEmpty && n != null) s.addMovement(label, n);
-                }
+              final movement = await _movementDialog(c);
+              if (movement != null) {
+                s.addMovement(movement.label, movement.amount);
               }
             },
           ),
