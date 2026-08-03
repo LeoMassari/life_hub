@@ -13,6 +13,13 @@ Ogni aggiornamento completato produce due archivi nella cartella `releases/`:
 - recupero automatico delle modifiche cloud rimaste in attesa;
 - protezione contro la sovrascrittura dei dati modificati offline.
 
+## 0.3.1
+
+- pubblicazione automatica gratuita tramite GitHub Pages;
+- compilazione e test a ogni aggiornamento del branch principale;
+- configurazione Supabase tramite GitHub Secrets;
+- guida per installare la web app da Safari su iPhone.
+
 ## 0.2.0
 
 - pagine Oggi, Finanze, Obiettivi, Scadenze e Impostazioni;

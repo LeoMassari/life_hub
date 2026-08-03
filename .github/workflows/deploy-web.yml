@@ -1,0 +1,62 @@
+name: Pubblica Life Hub Web
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scarica il progetto
+        uses: actions/checkout@v6
+
+      - name: Installa Flutter stabile
+        run: |
+          git clone https://github.com/flutter/flutter.git --depth 1 --branch stable "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+
+      - name: Configura GitHub Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Verifica e compila
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          flutter pub get
+          flutter test
+          flutter build web --release \
+            --base-href "${{ steps.pages.outputs.base_path }}/" \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY"
+
+      - name: Prepara il sito
+        run: touch build/web/.nojekyll
+
+      - name: Carica il pacchetto Pages
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: build/web
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Pubblica
+        id: deployment
+        uses: actions/deploy-pages@v4
