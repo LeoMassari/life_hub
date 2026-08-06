@@ -7,15 +7,21 @@ class AppState extends ChangeNotifier {
   final AppStore store;
   bool ready = false;
   bool darkMode = false;
+  int themeSeedValue = 0xff6558d3;
+  String? backgroundImageBase64;
+  double monthlySalary = 0;
   List<TaskItem> tasks = [];
   List<ReminderItem> reminders = [];
   List<DeadlineItem> deadlines = [];
   List<Movement> movements = [];
+  List<DebtItem> debts = [];
+  List<RecurringExpense> recurringExpenses = [];
   List<GoalItem> goals = [];
   List<BookItem> books = [];
   List<CycleItem> cycleItems = [];
   List<CalendarItem> calendarItems = [];
   List<ProjectItem> projects = [];
+  List<PhotoWidgetItem> photoWidgets = [];
   String _id() => DateTime.now().microsecondsSinceEpoch.toString();
 
   Future<void> init() async {
@@ -47,9 +53,26 @@ class AppState extends ChangeNotifier {
           date: DateTime.now(),
         ),
       ];
+      monthlySalary = 1800;
+      recurringExpenses = [
+        RecurringExpense(id: _id(), title: 'Abbonamenti', amount: 24.99),
+      ];
       goals = [
-        GoalItem(id: _id(), title: 'Fondo emergenze', progress: .35),
-        GoalItem(id: _id(), title: 'Allenamento settimanale', progress: .6),
+        GoalItem(
+          id: _id(),
+          title: 'Fondo emergenze',
+          targetAmount: 5000,
+          savedAmount: 1750,
+          description:
+              'Una riserva per affrontare gli imprevisti con serenità.',
+        ),
+        GoalItem(
+          id: _id(),
+          title: 'Viaggio',
+          targetAmount: 2500,
+          savedAmount: 600,
+          description: 'Budget dedicato al prossimo viaggio.',
+        ),
       ];
       await _save();
     } else {
@@ -66,6 +89,12 @@ class AppState extends ChangeNotifier {
       movements = items(
         'movements',
       ).map((e) => Movement.fromJson(Map<String, dynamic>.from(e))).toList();
+      debts = items(
+        'debts',
+      ).map((e) => DebtItem.fromJson(Map<String, dynamic>.from(e))).toList();
+      recurringExpenses = items('recurringExpenses')
+          .map((e) => RecurringExpense.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
       goals = items(
         'goals',
       ).map((e) => GoalItem.fromJson(Map<String, dynamic>.from(e))).toList();
@@ -81,7 +110,13 @@ class AppState extends ChangeNotifier {
       projects = items(
         'projects',
       ).map((e) => ProjectItem.fromJson(Map<String, dynamic>.from(e))).toList();
+      photoWidgets = items('photoWidgets')
+          .map((e) => PhotoWidgetItem.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
       darkMode = j['darkMode'] ?? false;
+      themeSeedValue = (j['themeSeedValue'] as num?)?.toInt() ?? 0xff6558d3;
+      backgroundImageBase64 = j['backgroundImageBase64'] as String?;
+      monthlySalary = (j['monthlySalary'] as num?)?.toDouble() ?? 0;
     }
     ready = true;
     notifyListeners();
@@ -92,12 +127,18 @@ class AppState extends ChangeNotifier {
     'reminders': reminders.map((e) => e.toJson()).toList(),
     'deadlines': deadlines.map((e) => e.toJson()).toList(),
     'movements': movements.map((e) => e.toJson()).toList(),
+    'debts': debts.map((e) => e.toJson()).toList(),
+    'recurringExpenses': recurringExpenses.map((e) => e.toJson()).toList(),
     'goals': goals.map((e) => e.toJson()).toList(),
     'books': books.map((e) => e.toJson()).toList(),
     'cycleItems': cycleItems.map((e) => e.toJson()).toList(),
     'calendarItems': calendarItems.map((e) => e.toJson()).toList(),
     'projects': projects.map((e) => e.toJson()).toList(),
+    'photoWidgets': photoWidgets.map((e) => e.toJson()).toList(),
     'darkMode': darkMode,
+    'themeSeedValue': themeSeedValue,
+    'backgroundImageBase64': backgroundImageBase64,
+    'monthlySalary': monthlySalary,
   });
   void addTask(String v) {
     tasks.add(TaskItem(id: _id(), title: v));
@@ -157,13 +198,101 @@ class AppState extends ChangeNotifier {
     _changed();
   }
 
+  void addDebt(String person, double totalAmount, double paidAmount) {
+    debts.add(
+      DebtItem(
+        id: _id(),
+        person: person,
+        totalAmount: totalAmount,
+        paidAmount: paidAmount,
+      ),
+    );
+    _changed();
+  }
+
+  void updateDebt(
+    DebtItem debt,
+    String person,
+    double totalAmount,
+    double paidAmount,
+  ) {
+    debt.person = person;
+    debt.totalAmount = totalAmount;
+    debt.paidAmount = paidAmount;
+    _changed();
+  }
+
+  void removeDebt(DebtItem debt) {
+    debts.remove(debt);
+    _changed();
+  }
+
+  void setMonthlySalary(double amount) {
+    monthlySalary = amount;
+    _changed();
+  }
+
+  void addRecurringExpense(String title, double amount) {
+    recurringExpenses.add(
+      RecurringExpense(id: _id(), title: title, amount: amount),
+    );
+    _changed();
+  }
+
+  void updateRecurringExpense(
+    RecurringExpense expense,
+    String title,
+    double amount,
+  ) {
+    expense.title = title;
+    expense.amount = amount;
+    _changed();
+  }
+
+  void removeRecurringExpense(RecurringExpense expense) {
+    recurringExpenses.remove(expense);
+    _changed();
+  }
+
   void addGoal(String title) {
     goals.add(GoalItem(id: _id(), title: title));
     _changed();
   }
 
   void setGoal(GoalItem goal, double value) {
-    goal.progress = value;
+    goal.savedAmount = goal.targetAmount * value;
+    _changed();
+  }
+
+  void addEconomicGoal(
+    String title,
+    double targetAmount,
+    double savedAmount,
+    String description,
+  ) {
+    goals.add(
+      GoalItem(
+        id: _id(),
+        title: title,
+        targetAmount: targetAmount,
+        savedAmount: savedAmount,
+        description: description,
+      ),
+    );
+    _changed();
+  }
+
+  void updateGoal(
+    GoalItem goal,
+    String title,
+    double targetAmount,
+    double savedAmount,
+    String description,
+  ) {
+    goal.title = title;
+    goal.targetAmount = targetAmount;
+    goal.savedAmount = savedAmount;
+    goal.description = description;
     _changed();
   }
 
@@ -249,6 +378,30 @@ class AppState extends ChangeNotifier {
     _changed();
   }
 
+  void addProjectFolder(ProjectItem project, String title) {
+    project.folders.add(ProjectFolder(id: _id(), title: title));
+    _changed();
+  }
+
+  void updateProjectFolder(ProjectFolder folder, String title) {
+    folder.title = title;
+    _changed();
+  }
+
+  void removeProjectFolder(ProjectItem project, ProjectFolder folder) {
+    project.folders.remove(folder);
+    _changed();
+  }
+
+  void addProjectFolderTask(
+    ProjectFolder folder,
+    String title,
+    DateTime? deadline,
+  ) {
+    folder.tasks.add(ProjectTask(id: _id(), title: title, deadline: deadline));
+    _changed();
+  }
+
   void updateProjectTask(ProjectTask task, String title, DateTime? deadline) {
     task.title = title;
     task.deadline = deadline;
@@ -262,11 +415,41 @@ class AppState extends ChangeNotifier {
 
   void removeProjectTask(ProjectItem project, ProjectTask task) {
     project.tasks.remove(task);
+    for (final folder in project.folders) {
+      folder.tasks.remove(task);
+    }
     _changed();
   }
 
   void setDark(bool value) {
     darkMode = value;
+    _changed();
+  }
+
+  void setThemeSeed(int value) {
+    themeSeedValue = value;
+    _changed();
+  }
+
+  void setBackgroundImage(String? imageBase64) {
+    backgroundImageBase64 = imageBase64;
+    _changed();
+  }
+
+  void addPhotoWidget(String imageBase64, String caption) {
+    photoWidgets.add(
+      PhotoWidgetItem(id: _id(), imageBase64: imageBase64, caption: caption),
+    );
+    _changed();
+  }
+
+  void updatePhotoWidgetCaption(PhotoWidgetItem photo, String caption) {
+    photo.caption = caption;
+    _changed();
+  }
+
+  void removePhotoWidget(PhotoWidgetItem photo) {
+    photoWidgets.remove(photo);
     _changed();
   }
 

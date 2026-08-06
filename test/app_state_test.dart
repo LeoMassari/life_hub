@@ -80,4 +80,69 @@ void main() {
     expect(restored.projects.single.progress, 1);
     expect(restored.projects.single.tasks.single.deadline, isNotNull);
   });
+
+  test('migra il progresso dei vecchi obiettivi economici', () async {
+    final store = MemoryStore()
+      ..value = {
+        'tasks': <Object>[],
+        'reminders': <Object>[],
+        'deadlines': <Object>[],
+        'movements': <Object>[],
+        'goals': [
+          {'id': 'goal-1', 'title': 'Fondo', 'progress': .35},
+        ],
+      };
+
+    final state = AppState(store);
+    await state.init();
+
+    expect(state.goals.single.targetAmount, 1000);
+    expect(state.goals.single.savedAmount, 350);
+    expect(state.goals.single.progress, .35);
+  });
+
+  test('salva debiti, spese ricorrenti e personalizzazione', () async {
+    final store = MemoryStore();
+    final state = AppState(store);
+    await state.init();
+
+    state.addDebt('Marco', 500, 120);
+    state.setMonthlySalary(2100);
+    state.addRecurringExpense('Affitto', 650);
+    state.setThemeSeed(0xff006c51);
+    state.setBackgroundImage('aW1tYWdpbmU=');
+    state.addPhotoWidget('Zm90bw==', 'Montagna');
+    await Future<void>.delayed(Duration.zero);
+
+    final restored = AppState(store);
+    await restored.init();
+
+    expect(restored.debts.single.remaining, 380);
+    expect(restored.monthlySalary, 2100);
+    expect(
+      restored.recurringExpenses.any((item) => item.title == 'Affitto'),
+      isTrue,
+    );
+    expect(restored.themeSeedValue, 0xff006c51);
+    expect(restored.backgroundImageBase64, 'aW1tYWdpbmU=');
+    expect(restored.photoWidgets.single.caption, 'Montagna');
+  });
+
+  test('calcola il progresso del progetto includendo le cartelle', () async {
+    final store = MemoryStore();
+    final state = AppState(store);
+    await state.init();
+
+    state.addProject('Trasloco');
+    final project = state.projects.last;
+    state.addProjectTask(project, 'Disdire utenze', null);
+    state.addProjectFolder(project, 'Scatoloni');
+    final folder = project.folders.single;
+    state.addProjectFolderTask(folder, 'Comprare scatole', null);
+    state.toggleProjectTask(folder.tasks.single);
+
+    expect(project.allTasks.length, 2);
+    expect(project.progress, .5);
+    expect(folder.progress, 1);
+  });
 }

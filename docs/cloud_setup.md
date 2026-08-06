@@ -26,3 +26,11 @@ account utilizzato su quel dispositivo.
 Con la conferma email attiva, ogni persona deve aprire il collegamento ricevuto
 da Supabase prima del primo accesso. Per una prima prova privata puoi disattivare
 temporaneamente **Confirm email** nelle impostazioni del provider Email.
+
+## Immagini personali
+
+Sfondo e widget fotografici vengono convertiti in dati compatti e sincronizzati
+nella stessa riga dell'account. L'app limita ogni immagine e consente al massimo
+quattro widget, così il salvataggio cloud resta ragionevolmente leggero. Questa
+sezione è pensata per poche immagini decorative o motivazionali, non come
+archivio fotografico.

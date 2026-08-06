@@ -5,6 +5,17 @@ Ogni aggiornamento completato produce due archivi nella cartella `releases/`:
 - `life_hub-source-vX.Y.Z.zip`: progetto Flutter completo, senza cronologia Git o file temporanei;
 - `life_hub-web-vX.Y.Z.zip`: applicazione web compilata, pronta per essere pubblicata su un servizio di hosting.
 
+## 0.7.0
+
+- debiti personali con importo totale, già restituito e residuo;
+- spese mensili ricorrenti con stipendio, disponibilità e grafico percentuale;
+- obiettivi economici apribili con cifra da raggiungere, risparmio e descrizione;
+- cartelle dentro ai progetti, ciascuna con le proprie attività e scadenze;
+- scelta del colore principale oltre al tema chiaro o scuro;
+- sfondo personale selezionabile dal dispositivo;
+- fino a quattro widget fotografici nella pagina Oggi;
+- migrazione automatica degli obiettivi e piena compatibilità con i dati 0.6.0.
+
 ## 0.6.0
 
 - nuovo menu Altro per mantenere semplice la navigazione;
