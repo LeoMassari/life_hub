@@ -68,21 +68,102 @@ class Movement {
   );
 }
 
-class GoalItem {
-  GoalItem({required this.id, required this.title, this.progress = 0});
+class DebtItem {
+  DebtItem({
+    required this.id,
+    required this.person,
+    required this.totalAmount,
+    this.paidAmount = 0,
+  });
+
+  final String id;
+  String person;
+  double totalAmount;
+  double paidAmount;
+
+  double get remaining => (totalAmount - paidAmount).clamp(0, double.infinity);
+  double get progress =>
+      totalAmount <= 0 ? 0 : (paidAmount / totalAmount).clamp(0, 1);
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'person': person,
+    'totalAmount': totalAmount,
+    'paidAmount': paidAmount,
+  };
+
+  factory DebtItem.fromJson(Map<String, dynamic> json) => DebtItem(
+    id: json['id'] as String,
+    person: json['person'] as String,
+    totalAmount: (json['totalAmount'] as num).toDouble(),
+    paidAmount: (json['paidAmount'] as num?)?.toDouble() ?? 0,
+  );
+}
+
+class RecurringExpense {
+  RecurringExpense({
+    required this.id,
+    required this.title,
+    required this.amount,
+  });
+
   final String id;
   String title;
-  double progress;
+  double amount;
+
+  Map<String, dynamic> toJson() => {'id': id, 'title': title, 'amount': amount};
+
+  factory RecurringExpense.fromJson(Map<String, dynamic> json) =>
+      RecurringExpense(
+        id: json['id'] as String,
+        title: json['title'] as String,
+        amount: (json['amount'] as num).toDouble(),
+      );
+}
+
+class GoalItem {
+  GoalItem({
+    required this.id,
+    required this.title,
+    this.targetAmount = 1000,
+    this.savedAmount = 0,
+    this.description = '',
+    double? progress,
+  }) {
+    if (progress != null && savedAmount == 0) {
+      savedAmount = targetAmount * progress;
+    }
+  }
+
+  final String id;
+  String title;
+  double targetAmount;
+  double savedAmount;
+  String description;
+
+  double get progress =>
+      targetAmount <= 0 ? 0 : (savedAmount / targetAmount).clamp(0, 1);
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,
-    'progress': progress,
+    'targetAmount': targetAmount,
+    'savedAmount': savedAmount,
+    'description': description,
   };
-  factory GoalItem.fromJson(Map<String, dynamic> j) => GoalItem(
-    id: j['id'],
-    title: j['title'],
-    progress: (j['progress'] as num?)?.toDouble() ?? 0,
-  );
+
+  factory GoalItem.fromJson(Map<String, dynamic> json) {
+    final target = (json['targetAmount'] as num?)?.toDouble() ?? 1000;
+    final saved = (json['savedAmount'] as num?)?.toDouble();
+    final legacyProgress = (json['progress'] as num?)?.toDouble() ?? 0;
+    return GoalItem(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      targetAmount: target,
+      savedAmount: saved ?? target * legacyProgress,
+      description: json['description'] as String? ?? '',
+    );
+  }
 }
 
 class BookItem {
@@ -167,9 +248,12 @@ class ProjectTask {
   );
 }
 
-class ProjectItem {
-  ProjectItem({required this.id, required this.title, List<ProjectTask>? tasks})
-    : tasks = tasks ?? [];
+class ProjectFolder {
+  ProjectFolder({
+    required this.id,
+    required this.title,
+    List<ProjectTask>? tasks,
+  }) : tasks = tasks ?? [];
 
   final String id;
   String title;
@@ -185,7 +269,7 @@ class ProjectItem {
     'tasks': tasks.map((task) => task.toJson()).toList(),
   };
 
-  factory ProjectItem.fromJson(Map<String, dynamic> json) => ProjectItem(
+  factory ProjectFolder.fromJson(Map<String, dynamic> json) => ProjectFolder(
     id: json['id'] as String,
     title: json['title'] as String,
     tasks: (json['tasks'] as List<dynamic>? ?? const [])
@@ -195,4 +279,79 @@ class ProjectItem {
         )
         .toList(),
   );
+}
+
+class ProjectItem {
+  ProjectItem({
+    required this.id,
+    required this.title,
+    List<ProjectTask>? tasks,
+    List<ProjectFolder>? folders,
+  }) : tasks = tasks ?? [],
+       folders = folders ?? [];
+
+  final String id;
+  String title;
+  final List<ProjectTask> tasks;
+  final List<ProjectFolder> folders;
+
+  Iterable<ProjectTask> get allTasks sync* {
+    yield* tasks;
+    for (final folder in folders) {
+      yield* folder.tasks;
+    }
+  }
+
+  double get progress => allTasks.isEmpty
+      ? 0
+      : allTasks.where((task) => task.done).length / allTasks.length;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'tasks': tasks.map((task) => task.toJson()).toList(),
+    'folders': folders.map((folder) => folder.toJson()).toList(),
+  };
+
+  factory ProjectItem.fromJson(Map<String, dynamic> json) => ProjectItem(
+    id: json['id'] as String,
+    title: json['title'] as String,
+    tasks: (json['tasks'] as List<dynamic>? ?? const [])
+        .map(
+          (task) =>
+              ProjectTask.fromJson(Map<String, dynamic>.from(task as Map)),
+        )
+        .toList(),
+    folders: (json['folders'] as List<dynamic>? ?? const [])
+        .map(
+          (folder) =>
+              ProjectFolder.fromJson(Map<String, dynamic>.from(folder as Map)),
+        )
+        .toList(),
+  );
+}
+
+class PhotoWidgetItem {
+  PhotoWidgetItem({
+    required this.id,
+    required this.imageBase64,
+    this.caption = '',
+  });
+
+  final String id;
+  String imageBase64;
+  String caption;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'imageBase64': imageBase64,
+    'caption': caption,
+  };
+
+  factory PhotoWidgetItem.fromJson(Map<String, dynamic> json) =>
+      PhotoWidgetItem(
+        id: json['id'] as String,
+        imageBase64: json['imageBase64'] as String,
+        caption: json['caption'] as String? ?? '',
+      );
 }
