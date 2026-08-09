@@ -58,4 +58,46 @@ void main() {
 
     expect(find.text('Allenamento breve'), findsOneWidget);
   });
+
+  testWidgets('apre l’editor con ordine e sfondo della pagina', (tester) async {
+    await tester.pumpWidget(LifeHubApp(store: MemoryStore()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Modifica'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Trascina le sezioni per cambiarne l’ordine.'),
+      findsOneWidget,
+    );
+    expect(find.text('Sfondo della pagina'), findsOneWidget);
+    expect(find.byIcon(Icons.drag_handle), findsWidgets);
+    expect(find.text('Predefinito'), findsOneWidget);
+    expect(find.text('Personale'), findsOneWidget);
+  });
+
+  testWidgets('crea una routine e apre il monitoraggio', (tester) async {
+    await tester.pumpWidget(LifeHubApp(store: MemoryStore()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Altro'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Routine'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Aggiungi routine'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, 'Meditazione');
+    await tester.enterText(find.byType(TextField).last, '2');
+    await tester.tap(find.text('Salva'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Meditazione'), findsOneWidget);
+    await tester.tap(find.text('Meditazione'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Andamento'), findsOneWidget);
+    expect(find.text('30 giorni'), findsOneWidget);
+    expect(find.text('Segna come fatta'), findsOneWidget);
+  });
 }

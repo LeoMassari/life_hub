@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:life_hub/data/local_store.dart';
+import 'package:life_hub/models/models.dart';
 import 'package:life_hub/state/app_state.dart';
 
 class MemoryStore implements AppStore {
@@ -208,6 +209,10 @@ void main() {
     await state.init();
 
     state.setSectionVisible('today', 'photos', false);
+    state.setSectionOrder('today', ['photos', 'tasks', 'overview']);
+    state.setPageBackgroundImage('today', 'aW1tYWdpbmU=');
+    state.setBackgroundTransparency(.4);
+    state.setPanelTransparency(.25);
     state.addChecklistFolder('Valigia');
     state.addChecklistEntry(state.checklistFolders.single, 'Caricabatterie');
     state.toggleChecklistEntry(state.checklistFolders.single.entries.single);
@@ -217,7 +222,31 @@ void main() {
     await restored.init();
 
     expect(restored.isSectionVisible('today', 'photos'), isFalse);
+    expect(restored.sectionOrder['today'], ['photos', 'tasks', 'overview']);
+    expect(restored.backgroundForPage('today'), 'aW1tYWdpbmU=');
+    expect(restored.usesCustomBackgroundForPage('today'), isTrue);
+    expect(restored.backgroundTransparency, .4);
+    expect(restored.panelTransparency, .25);
     expect(restored.checklistFolders.single.title, 'Valigia');
     expect(restored.checklistFolders.single.entries.single.done, isTrue);
+  });
+
+  test('salva routine, frequenza e storico delle esecuzioni', () async {
+    final store = MemoryStore();
+    final state = AppState(store, clock: () => DateTime(2026, 8, 9, 8, 30));
+    await state.init();
+
+    state.addRoutine('Bere acqua', 6, RoutinePeriod.day);
+    state.completeRoutine(state.routines.single);
+    state.completeRoutine(state.routines.single);
+    await Future<void>.delayed(Duration.zero);
+
+    final restored = AppState(store);
+    await restored.init();
+
+    expect(restored.routines.single.title, 'Bere acqua');
+    expect(restored.routines.single.targetCount, 6);
+    expect(restored.routines.single.period, RoutinePeriod.day);
+    expect(restored.routines.single.completions, hasLength(2));
   });
 }

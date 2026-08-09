@@ -421,3 +421,44 @@ class ChecklistFolder {
         .toList(),
   );
 }
+
+enum RoutinePeriod { day, week, month }
+
+class RoutineItem {
+  RoutineItem({
+    required this.id,
+    required this.title,
+    required this.targetCount,
+    required this.period,
+    List<DateTime>? completions,
+  }) : completions = completions ?? [];
+
+  final String id;
+  String title;
+  int targetCount;
+  RoutinePeriod period;
+  final List<DateTime> completions;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'targetCount': targetCount,
+    'period': period.name,
+    'completions': completions
+        .map((completion) => completion.toIso8601String())
+        .toList(),
+  };
+
+  factory RoutineItem.fromJson(Map<String, dynamic> json) => RoutineItem(
+    id: json['id'] as String,
+    title: json['title'] as String,
+    targetCount: (json['targetCount'] as num?)?.toInt() ?? 1,
+    period: RoutinePeriod.values.firstWhere(
+      (period) => period.name == json['period'],
+      orElse: () => RoutinePeriod.day,
+    ),
+    completions: (json['completions'] as List<dynamic>? ?? const [])
+        .map((completion) => DateTime.parse(completion as String))
+        .toList(),
+  );
+}
