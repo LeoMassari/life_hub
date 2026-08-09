@@ -5,6 +5,18 @@ Ogni aggiornamento completato produce due archivi nella cartella `releases/`:
 - `life_hub-source-vX.Y.Z.zip`: progetto Flutter completo, senza cronologia Git o file temporanei;
 - `life_hub-web-vX.Y.Z.zip`: applicazione web compilata, pronta per essere pubblicata su un servizio di hosting.
 
+## 0.8.0
+
+- orario facoltativo per ogni attività nella pagina Oggi;
+- pianificazione della giornata di domani con nome e orario;
+- cambio giornata automatico a un’ora configurabile;
+- recupero delle attività non completate e pulsante per riportarle a Oggi;
+- Modalità Buonanotte configurabile dalle Impostazioni;
+- pulsante Modifica in ogni pagina per attivare o disattivare le sezioni senza perdere i dati;
+- nuova pagina Routine predisposta come work in progress;
+- nuova pagina Check lists con cartelle ed elementi spuntabili;
+- compatibilità automatica con tutti i dati delle versioni precedenti.
+
 ## 0.7.0
 
 - debiti personali con importo totale, già restituito e residuo;

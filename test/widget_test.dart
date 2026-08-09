@@ -22,9 +22,13 @@ void main() {
     expect(find.text('Obiettivi'), findsWidgets);
     expect(find.text('Scadenze'), findsOneWidget);
     expect(find.text('Altro'), findsOneWidget);
+    expect(find.text('Modifica'), findsOneWidget);
 
-    await tester.drag(find.byType(ListView).first, const Offset(0, -700));
-    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Panoramica'),
+      600,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Panoramica'), findsOneWidget);
     expect(find.text('Saldo'), findsOneWidget);
 
@@ -35,6 +39,23 @@ void main() {
     expect(find.text('Studio'), findsOneWidget);
     expect(find.text('Cicli'), findsOneWidget);
     expect(find.text('Calendario'), findsOneWidget);
+    expect(find.text('Routine'), findsOneWidget);
+    expect(find.text('Check lists'), findsOneWidget);
     expect(find.text('Impostazioni'), findsOneWidget);
+  });
+
+  testWidgets('aggiunge nome e orario alle attività di oggi', (tester) async {
+    await tester.pumpWidget(LifeHubApp(store: MemoryStore()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Aggiungi attività'));
+    await tester.pumpAndSettle();
+    expect(find.text('L’orario è facoltativo'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).last, 'Allenamento breve');
+    await tester.tap(find.text('Salva'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Allenamento breve'), findsOneWidget);
   });
 }

@@ -3,14 +3,18 @@ import '../data/local_store.dart';
 import '../models/models.dart';
 
 class AppState extends ChangeNotifier {
-  AppState(this.store);
+  AppState(this.store, {DateTime Function()? clock})
+    : _clock = clock ?? DateTime.now;
   final AppStore store;
+  final DateTime Function() _clock;
   bool ready = false;
   bool darkMode = false;
   int themeSeedValue = 0xff6558d3;
   String? backgroundImageBase64;
   double monthlySalary = 0;
   List<TaskItem> tasks = [];
+  List<TaskItem> tomorrowTasks = [];
+  List<TaskItem> incompleteTasks = [];
   List<ReminderItem> reminders = [];
   List<DeadlineItem> deadlines = [];
   List<Movement> movements = [];
@@ -22,11 +26,32 @@ class AppState extends ChangeNotifier {
   List<CalendarItem> calendarItems = [];
   List<ProjectItem> projects = [];
   List<PhotoWidgetItem> photoWidgets = [];
-  String _id() => DateTime.now().microsecondsSinceEpoch.toString();
+  List<ChecklistFolder> checklistFolders = [];
+  Map<String, bool> sectionVisibility = {};
+  bool bedtimeMode = false;
+  int dayResetHour = 4;
+  late DateTime activeDay;
+  int _idCounter = 0;
+  String _id() => '${_clock().microsecondsSinceEpoch}-${_idCounter++}';
+
+  DateTime _dateOnly(DateTime value) =>
+      DateTime(value.year, value.month, value.day);
+
+  DateTime _effectiveDay(DateTime value) =>
+      _dateOnly(value.subtract(Duration(hours: dayResetHour)));
+
+  String _dayToJson(DateTime value) =>
+      '${value.year.toString().padLeft(4, '0')}-'
+      '${value.month.toString().padLeft(2, '0')}-'
+      '${value.day.toString().padLeft(2, '0')}';
+
+  TaskItem _freshTask(TaskItem task) =>
+      TaskItem(id: task.id, title: task.title, time: task.time);
 
   Future<void> init() async {
     final j = await store.load();
     if (j == null) {
+      activeDay = _effectiveDay(_clock());
       tasks = [
         TaskItem(id: _id(), title: 'Controlla le priorità di oggi'),
         TaskItem(id: _id(), title: 'Fai una pausa di 10 minuti'),
@@ -113,10 +138,29 @@ class AppState extends ChangeNotifier {
       photoWidgets = items('photoWidgets')
           .map((e) => PhotoWidgetItem.fromJson(Map<String, dynamic>.from(e)))
           .toList();
+      tomorrowTasks = items(
+        'tomorrowTasks',
+      ).map((e) => TaskItem.fromJson(Map<String, dynamic>.from(e))).toList();
+      incompleteTasks = items(
+        'incompleteTasks',
+      ).map((e) => TaskItem.fromJson(Map<String, dynamic>.from(e))).toList();
+      checklistFolders = items('checklistFolders')
+          .map((e) => ChecklistFolder.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
       darkMode = j['darkMode'] ?? false;
       themeSeedValue = (j['themeSeedValue'] as num?)?.toInt() ?? 0xff6558d3;
       backgroundImageBase64 = j['backgroundImageBase64'] as String?;
       monthlySalary = (j['monthlySalary'] as num?)?.toDouble() ?? 0;
+      bedtimeMode = j['bedtimeMode'] as bool? ?? false;
+      dayResetHour = ((j['dayResetHour'] as num?)?.toInt() ?? 4).clamp(0, 23);
+      sectionVisibility = Map<String, bool>.from(
+        j['sectionVisibility'] as Map? ?? const {},
+      );
+      final savedActiveDay = j['activeDay'] as String?;
+      activeDay = savedActiveDay == null
+          ? _effectiveDay(_clock())
+          : DateTime.parse(savedActiveDay);
+      if (_rolloverIfNeeded()) await _save();
     }
     ready = true;
     notifyListeners();
@@ -124,6 +168,8 @@ class AppState extends ChangeNotifier {
 
   Future<void> _save() => store.save({
     'tasks': tasks.map((e) => e.toJson()).toList(),
+    'tomorrowTasks': tomorrowTasks.map((e) => e.toJson()).toList(),
+    'incompleteTasks': incompleteTasks.map((e) => e.toJson()).toList(),
     'reminders': reminders.map((e) => e.toJson()).toList(),
     'deadlines': deadlines.map((e) => e.toJson()).toList(),
     'movements': movements.map((e) => e.toJson()).toList(),
@@ -135,13 +181,18 @@ class AppState extends ChangeNotifier {
     'calendarItems': calendarItems.map((e) => e.toJson()).toList(),
     'projects': projects.map((e) => e.toJson()).toList(),
     'photoWidgets': photoWidgets.map((e) => e.toJson()).toList(),
+    'checklistFolders': checklistFolders.map((e) => e.toJson()).toList(),
     'darkMode': darkMode,
     'themeSeedValue': themeSeedValue,
     'backgroundImageBase64': backgroundImageBase64,
     'monthlySalary': monthlySalary,
+    'sectionVisibility': sectionVisibility,
+    'bedtimeMode': bedtimeMode,
+    'dayResetHour': dayResetHour,
+    'activeDay': _dayToJson(activeDay),
   });
-  void addTask(String v) {
-    tasks.add(TaskItem(id: _id(), title: v));
+  void addTask(String title, {String? time}) {
+    tasks.add(TaskItem(id: _id(), title: title, time: time));
     _changed();
   }
 
@@ -155,8 +206,91 @@ class AppState extends ChangeNotifier {
     _changed();
   }
 
+  void updateTask(TaskItem task, String title, String? time) {
+    task.title = title;
+    task.time = time;
+    _changed();
+  }
+
   void removeTask(TaskItem value) {
     tasks.remove(value);
+    _changed();
+  }
+
+  void addTomorrowTask(String title, {String? time}) {
+    tomorrowTasks.add(TaskItem(id: _id(), title: title, time: time));
+    _changed();
+  }
+
+  void updateTomorrowTask(TaskItem task, String title, String? time) {
+    task.title = title;
+    task.time = time;
+    _changed();
+  }
+
+  void removeTomorrowTask(TaskItem task) {
+    tomorrowTasks.remove(task);
+    _changed();
+  }
+
+  void restoreIncompleteTask(TaskItem task) {
+    incompleteTasks.remove(task);
+    tasks.add(_freshTask(task));
+    _changed();
+  }
+
+  void removeIncompleteTask(TaskItem task) {
+    incompleteTasks.remove(task);
+    _changed();
+  }
+
+  bool _rolloverIfNeeded() {
+    final target = _effectiveDay(_clock());
+    var changed = false;
+    while (activeDay.isBefore(target)) {
+      _rollForwardOneDay();
+      changed = true;
+    }
+    return changed;
+  }
+
+  void _rollForwardOneDay() {
+    incompleteTasks.addAll(tasks.where((task) => !task.done).map(_freshTask));
+    tasks = tomorrowTasks.map(_freshTask).toList();
+    tomorrowTasks = [];
+    activeDay = activeDay.add(const Duration(days: 1));
+  }
+
+  void checkDayRollover() {
+    if (_rolloverIfNeeded()) _changed();
+  }
+
+  bool startNextDay() {
+    if (!canStartNextDay) return false;
+    if (bedtimeMode && tomorrowTasks.isEmpty) return false;
+    _rollForwardOneDay();
+    _changed();
+    return true;
+  }
+
+  bool get canStartNextDay => !activeDay.isAfter(_effectiveDay(_clock()));
+
+  bool isSectionVisible(String pageId, String sectionId) =>
+      sectionVisibility['$pageId::$sectionId'] ?? true;
+
+  void setSectionVisible(String pageId, String sectionId, bool visible) {
+    sectionVisibility['$pageId::$sectionId'] = visible;
+    _changed();
+  }
+
+  void setBedtimeMode(bool value) {
+    bedtimeMode = value;
+    _changed();
+  }
+
+  void setDayResetHour(int value) {
+    dayResetHour = value.clamp(0, 23);
+    _rolloverIfNeeded();
     _changed();
   }
 
@@ -450,6 +584,41 @@ class AppState extends ChangeNotifier {
 
   void removePhotoWidget(PhotoWidgetItem photo) {
     photoWidgets.remove(photo);
+    _changed();
+  }
+
+  void addChecklistFolder(String title) {
+    checklistFolders.add(ChecklistFolder(id: _id(), title: title));
+    _changed();
+  }
+
+  void updateChecklistFolder(ChecklistFolder folder, String title) {
+    folder.title = title;
+    _changed();
+  }
+
+  void removeChecklistFolder(ChecklistFolder folder) {
+    checklistFolders.remove(folder);
+    _changed();
+  }
+
+  void addChecklistEntry(ChecklistFolder folder, String title) {
+    folder.entries.add(ChecklistEntry(id: _id(), title: title));
+    _changed();
+  }
+
+  void updateChecklistEntry(ChecklistEntry entry, String title) {
+    entry.title = title;
+    _changed();
+  }
+
+  void toggleChecklistEntry(ChecklistEntry entry) {
+    entry.done = !entry.done;
+    _changed();
+  }
+
+  void removeChecklistEntry(ChecklistFolder folder, ChecklistEntry entry) {
+    folder.entries.remove(entry);
     _changed();
   }
 
