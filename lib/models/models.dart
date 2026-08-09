@@ -1,11 +1,26 @@
 class TaskItem {
-  TaskItem({required this.id, required this.title, this.done = false});
+  TaskItem({
+    required this.id,
+    required this.title,
+    this.time,
+    this.done = false,
+  });
   final String id;
   String title;
+  String? time;
   bool done;
-  Map<String, dynamic> toJson() => {'id': id, 'title': title, 'done': done};
-  factory TaskItem.fromJson(Map<String, dynamic> j) =>
-      TaskItem(id: j['id'], title: j['title'], done: j['done'] ?? false);
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'time': time,
+    'done': done,
+  };
+  factory TaskItem.fromJson(Map<String, dynamic> j) => TaskItem(
+    id: j['id'],
+    title: j['title'],
+    time: j['time'] as String?,
+    done: j['done'] ?? false,
+  );
 }
 
 class ReminderItem {
@@ -354,4 +369,55 @@ class PhotoWidgetItem {
         imageBase64: json['imageBase64'] as String,
         caption: json['caption'] as String? ?? '',
       );
+}
+
+class ChecklistEntry {
+  ChecklistEntry({required this.id, required this.title, this.done = false});
+
+  final String id;
+  String title;
+  bool done;
+
+  Map<String, dynamic> toJson() => {'id': id, 'title': title, 'done': done};
+
+  factory ChecklistEntry.fromJson(Map<String, dynamic> json) => ChecklistEntry(
+    id: json['id'] as String,
+    title: json['title'] as String,
+    done: json['done'] as bool? ?? false,
+  );
+}
+
+class ChecklistFolder {
+  ChecklistFolder({
+    required this.id,
+    required this.title,
+    List<ChecklistEntry>? entries,
+  }) : entries = entries ?? [];
+
+  final String id;
+  String title;
+  final List<ChecklistEntry> entries;
+
+  double get progress => entries.isEmpty
+      ? 0
+      : entries.where((entry) => entry.done).length / entries.length;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'entries': entries.map((entry) => entry.toJson()).toList(),
+  };
+
+  factory ChecklistFolder.fromJson(
+    Map<String, dynamic> json,
+  ) => ChecklistFolder(
+    id: json['id'] as String,
+    title: json['title'] as String,
+    entries: (json['entries'] as List<dynamic>? ?? const [])
+        .map(
+          (entry) =>
+              ChecklistEntry.fromJson(Map<String, dynamic>.from(entry as Map)),
+        )
+        .toList(),
+  );
 }

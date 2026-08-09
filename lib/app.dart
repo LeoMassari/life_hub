@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:image_picker/image_picker.dart';
 import 'data/local_store.dart';
 import 'models/models.dart';
@@ -37,6 +39,9 @@ class _LifeHubAppState extends State<LifeHubApp> {
   Widget build(BuildContext c) => MaterialApp(
     debugShowCheckedModeBanner: false,
     title: 'Life Hub',
+    locale: const Locale('it'),
+    supportedLocales: const [Locale('it')],
+    localizationsDelegates: GlobalMaterialLocalizations.delegates,
     themeMode: state.darkMode ? ThemeMode.dark : ThemeMode.light,
     theme: _theme(Brightness.light, Color(state.themeSeedValue)),
     darkTheme: _theme(Brightness.dark, Color(state.themeSeedValue)),
@@ -131,11 +136,29 @@ enum HubPage {
   study,
   cycles,
   calendar,
+  routine,
+  checklists,
   settings,
 }
 
 class _LifeHubShellState extends State<LifeHubShell> {
   HubPage selectedPage = HubPage.today;
+  Timer? _dayTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _dayTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => widget.state.checkDayRollover(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _dayTimer?.cancel();
+    super.dispose();
+  }
 
   static const primaryDestinations = [
     ('Oggi', Icons.today_outlined),
@@ -158,12 +181,14 @@ class _LifeHubShellState extends State<LifeHubShell> {
     HubPage.finance => FinancePage(widget.state),
     HubPage.goals => GoalsPage(widget.state),
     HubPage.deadlines => DeadlinesPage(widget.state),
-    HubPage.training => const WorkInProgressPage(
+    HubPage.training => WorkInProgressPage(
+      state: widget.state,
       title: 'Allenamento',
       subtitle: 'Il tuo spazio dedicato al movimento',
       icon: Icons.fitness_center,
     ),
-    HubPage.nutrition => const WorkInProgressPage(
+    HubPage.nutrition => WorkInProgressPage(
+      state: widget.state,
       title: 'Alimentazione',
       subtitle: 'Il tuo spazio dedicato all’alimentazione',
       icon: Icons.restaurant_outlined,
@@ -171,6 +196,13 @@ class _LifeHubShellState extends State<LifeHubShell> {
     HubPage.study => StudyPage(widget.state),
     HubPage.cycles => CyclesPage(widget.state),
     HubPage.calendar => CalendarPage(widget.state),
+    HubPage.routine => WorkInProgressPage(
+      state: widget.state,
+      title: 'Routine',
+      subtitle: 'Costruisci e monitora le abitudini che contano',
+      icon: Icons.repeat,
+    ),
+    HubPage.checklists => ChecklistsPage(widget.state),
     HubPage.settings => SettingsPage(
       widget.state,
       cloudEmail: widget.cloudEmail,
@@ -231,6 +263,16 @@ class _LifeHubShellState extends State<LifeHubShell> {
                 page: HubPage.calendar,
                 icon: Icons.calendar_month_outlined,
                 title: 'Calendario',
+              ),
+              _MoreMenuTile(
+                page: HubPage.routine,
+                icon: Icons.repeat,
+                title: 'Routine',
+              ),
+              _MoreMenuTile(
+                page: HubPage.checklists,
+                icon: Icons.checklist_outlined,
+                title: 'Check lists',
               ),
               const Divider(),
               _MoreMenuTile(
@@ -355,25 +397,112 @@ class PageBody extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.children,
+    this.state,
+    this.pageId,
   });
   final String title, subtitle;
   final List<Widget> children;
-  @override
-  Widget build(BuildContext c) => ListView(
-    padding: const EdgeInsets.all(20),
-    children: [
-      Text(
-        title,
-        style: Theme.of(
-          c,
-        ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800),
+  final AppState? state;
+  final String? pageId;
+
+  Future<void> _editSections(BuildContext context) async {
+    final appState = state;
+    if (appState == null) return;
+    final sections = children.whereType<Section>().toList();
+    await showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Personalizza $title'),
+          content: SizedBox(
+            width: 430,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: sections
+                    .map(
+                      (section) => SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(section.title),
+                        subtitle: const Text(
+                          'I dati restano salvati e sincronizzati nel cloud.',
+                        ),
+                        value: appState.isSectionVisible(
+                          pageId ?? title,
+                          section.visibilityId,
+                        ),
+                        onChanged: (value) {
+                          appState.setSectionVisible(
+                            pageId ?? title,
+                            section.visibilityId,
+                            value,
+                          );
+                          setDialogState(() {});
+                        },
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Fatto'),
+            ),
+          ],
+        ),
       ),
-      const SizedBox(height: 4),
-      Text(subtitle, style: Theme.of(c).textTheme.bodyLarge),
-      const SizedBox(height: 22),
-      ...children,
-    ],
-  );
+    );
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    final visibleChildren = children.where((child) {
+      if (state == null || child is! Section) return true;
+      return state!.isSectionVisible(pageId ?? title, child.visibilityId);
+    }).toList();
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: Theme.of(c).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(subtitle, style: Theme.of(c).textTheme.bodyLarge),
+                ],
+              ),
+            ),
+            if (state != null)
+              TextButton.icon(
+                onPressed: () => _editSections(c),
+                icon: const Icon(Icons.tune),
+                label: const Text('Modifica'),
+              ),
+          ],
+        ),
+        const SizedBox(height: 22),
+        if (visibleChildren.isEmpty)
+          const _EmptyState(
+            icon: Icons.visibility_off_outlined,
+            message:
+                'Tutte le sezioni sono disattivate. Usa Modifica per riattivarle.',
+          )
+        else
+          ...visibleChildren,
+      ],
+    );
+  }
 }
 
 class Section extends StatelessWidget {
@@ -382,10 +511,13 @@ class Section extends StatelessWidget {
     required this.title,
     required this.child,
     this.action,
+    this.id,
   });
   final String title;
   final Widget child;
   final Widget? action;
+  final String? id;
+  String get visibilityId => id ?? title;
   @override
   Widget build(BuildContext c) => Padding(
     padding: const EdgeInsets.only(bottom: 18),
@@ -451,6 +583,95 @@ Future<String?> _textDialog(
       ],
     ),
   );
+}
+
+Future<({String title, String? time})?> _todayTaskDialog(
+  BuildContext context, {
+  TaskItem? task,
+  String dialogTitle = 'Nuova attività',
+}) async {
+  final titleController = TextEditingController(text: task?.title ?? '');
+  String? selectedTime = task?.time;
+  String? error;
+  final result = await showDialog<({String title, String? time})>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: Text(dialogTitle),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Attività',
+                  hintText: 'Cosa vuoi fare?',
+                  errorText: error,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.schedule),
+                title: Text(selectedTime ?? 'Nessun orario'),
+                subtitle: const Text('L’orario è facoltativo'),
+                trailing: selectedTime == null
+                    ? const Icon(Icons.chevron_right)
+                    : IconButton(
+                        tooltip: 'Rimuovi orario',
+                        icon: const Icon(Icons.close),
+                        onPressed: () =>
+                            setDialogState(() => selectedTime = null),
+                      ),
+                onTap: () async {
+                  final parts = selectedTime?.split(':');
+                  final initial = parts?.length == 2
+                      ? TimeOfDay(
+                          hour: int.tryParse(parts![0]) ?? TimeOfDay.now().hour,
+                          minute:
+                              int.tryParse(parts[1]) ?? TimeOfDay.now().minute,
+                        )
+                      : TimeOfDay.now();
+                  final picked = await showTimePicker(
+                    context: context,
+                    initialTime: initial,
+                  );
+                  if (picked != null) {
+                    setDialogState(() {
+                      selectedTime =
+                          '${picked.hour.toString().padLeft(2, '0')}:'
+                          '${picked.minute.toString().padLeft(2, '0')}';
+                    });
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final title = titleController.text.trim();
+              if (title.isEmpty) {
+                setDialogState(() => error = 'Inserisci un nome');
+                return;
+              }
+              Navigator.pop(context, (title: title, time: selectedTime));
+            },
+            child: const Text('Salva'),
+          ),
+        ],
+      ),
+    ),
+  );
+  return result;
 }
 
 Future<bool> _confirmDelete(BuildContext context, String name) async =>
@@ -690,6 +911,22 @@ class _PhotoWidgetCard extends StatelessWidget {
 class TodayPage extends StatelessWidget {
   const TodayPage(this.s, {super.key});
   final AppState s;
+
+  Widget _timeLabel(BuildContext context, String? time) => time == null
+      ? const SizedBox.shrink()
+      : Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.schedule,
+              size: 16,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: 5),
+            Text(time),
+          ],
+        );
+
   @override
   Widget build(BuildContext c) {
     final done = s.tasks.where((e) => e.done).length;
@@ -711,6 +948,8 @@ class TodayPage extends StatelessWidget {
     return PageBody(
       title: 'Oggi',
       subtitle: 'La tua giornata a colpo d’occhio',
+      state: s,
+      pageId: 'today',
       children: [
         Section(
           title: 'Progresso',
@@ -731,16 +970,26 @@ class TodayPage extends StatelessWidget {
         ),
         Section(
           title: 'Attività',
-          action: IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () async {
-              final v = await _textDialog(
-                c,
-                'Nuova attività',
-                hint: 'Cosa vuoi fare?',
-              );
-              if (v?.isNotEmpty == true) s.addTask(v!);
-            },
+          id: 'tasks',
+          action: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextButton.icon(
+                icon: const Icon(Icons.edit_calendar_outlined),
+                label: const Text('Programma domani'),
+                onPressed: () => _showTomorrowPlanner(c, s),
+              ),
+              IconButton(
+                tooltip: 'Aggiungi attività',
+                icon: const Icon(Icons.add),
+                onPressed: () async {
+                  final result = await _todayTaskDialog(c);
+                  if (result != null) {
+                    s.addTask(result.title, time: result.time);
+                  }
+                },
+              ),
+            ],
           ),
           child: s.tasks.isEmpty
               ? const Text('Nessuna attività')
@@ -756,13 +1005,13 @@ class TodayPage extends StatelessWidget {
                                 tooltip: 'Modifica',
                                 icon: const Icon(Icons.edit_outlined),
                                 onPressed: () async {
-                                  final title = await _textDialog(
+                                  final result = await _todayTaskDialog(
                                     c,
-                                    'Modifica attività',
-                                    initialValue: e.title,
+                                    task: e,
+                                    dialogTitle: 'Modifica attività',
                                   );
-                                  if (title?.isNotEmpty == true) {
-                                    s.updateTaskTitle(e, title!);
+                                  if (result != null) {
+                                    s.updateTask(e, result.title, result.time);
                                   }
                                 },
                               ),
@@ -787,10 +1036,92 @@ class TodayPage extends StatelessWidget {
                                   : null,
                             ),
                           ),
+                          subtitle: e.time == null
+                              ? null
+                              : _timeLabel(c, e.time),
                         ),
                       )
                       .toList(),
                 ),
+        ),
+        Section(
+          title: 'Attività non completate',
+          id: 'incomplete_tasks',
+          child: s.incompleteTasks.isEmpty
+              ? const _EmptyState(
+                  icon: Icons.task_alt,
+                  message: 'Non ci sono attività rimaste indietro.',
+                )
+              : Column(
+                  children: s.incompleteTasks
+                      .map(
+                        (task) => ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.history),
+                          title: Text(task.title),
+                          subtitle: task.time == null
+                              ? null
+                              : _timeLabel(c, task.time),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: 'Riporta a oggi',
+                                icon: const Icon(Icons.redo),
+                                onPressed: () => s.restoreIncompleteTask(task),
+                              ),
+                              IconButton(
+                                tooltip: 'Elimina',
+                                icon: const Icon(Icons.delete_outline),
+                                onPressed: () async {
+                                  if (await _confirmDelete(c, task.title)) {
+                                    s.removeIncompleteTask(task);
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+        ),
+        Section(
+          title: 'Modalità Buonanotte',
+          id: 'bedtime',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                s.bedtimeMode
+                    ? 'La modalità è attiva: prima di chiudere la giornata devi programmare almeno un’attività per domani.'
+                    : 'Chiudi la giornata e carica subito le attività programmate per domani.',
+              ),
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                icon: const Icon(Icons.bedtime_outlined),
+                label: const Text('Buonanotte'),
+                onPressed: !s.canStartNextDay
+                    ? null
+                    : () {
+                        final advanced = s.startNextDay();
+                        if (!advanced) {
+                          ScaffoldMessenger.of(c).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Programma almeno un’attività per domani prima di continuare.',
+                              ),
+                            ),
+                          );
+                        }
+                      },
+              ),
+              if (s.tomorrowTasks.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text('${s.tomorrowTasks.length} attività già programmate'),
+              ],
+            ],
+          ),
         ),
         Section(
           title: 'Promemoria',
@@ -938,6 +1269,125 @@ class TodayPage extends StatelessWidget {
       ],
     );
   }
+}
+
+Future<void> _showTomorrowPlanner(BuildContext context, AppState state) async {
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    constraints: const BoxConstraints(maxWidth: 620),
+    builder: (context) => StatefulBuilder(
+      builder: (context, setSheetState) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            0,
+            20,
+            20 + MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Programma domani',
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Aggiungi attività',
+                    icon: const Icon(Icons.add),
+                    onPressed: () async {
+                      final result = await _todayTaskDialog(
+                        context,
+                        dialogTitle: 'Attività di domani',
+                      );
+                      if (result != null) {
+                        state.addTomorrowTask(result.title, time: result.time);
+                        setSheetState(() {});
+                      }
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Queste attività verranno caricate al prossimo cambio giornata.',
+              ),
+              const SizedBox(height: 14),
+              Flexible(
+                child: state.tomorrowTasks.isEmpty
+                    ? const _EmptyState(
+                        icon: Icons.event_available_outlined,
+                        message:
+                            'La giornata di domani non è ancora programmata.',
+                      )
+                    : ListView(
+                        shrinkWrap: true,
+                        children: state.tomorrowTasks
+                            .map(
+                              (task) => ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: CircleAvatar(
+                                  child: Text(task.time ?? '—'),
+                                ),
+                                title: Text(task.title),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      tooltip: 'Modifica',
+                                      icon: const Icon(Icons.edit_outlined),
+                                      onPressed: () async {
+                                        final result = await _todayTaskDialog(
+                                          context,
+                                          task: task,
+                                          dialogTitle: 'Modifica attività',
+                                        );
+                                        if (result != null) {
+                                          state.updateTomorrowTask(
+                                            task,
+                                            result.title,
+                                            result.time,
+                                          );
+                                          setSheetState(() {});
+                                        }
+                                      },
+                                    ),
+                                    IconButton(
+                                      tooltip: 'Elimina',
+                                      icon: const Icon(Icons.delete_outline),
+                                      onPressed: () {
+                                        state.removeTomorrowTask(task);
+                                        setSheetState(() {});
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Fatto'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 double? _parseAmount(String value) =>
@@ -1247,6 +1697,8 @@ class FinancePage extends StatelessWidget {
     return PageBody(
       title: 'Finanze',
       subtitle: 'Movimenti, impegni e spese mensili',
+      state: s,
+      pageId: 'finance',
       children: [
         Section(
           title: 'Saldo attuale',
@@ -1259,6 +1711,7 @@ class FinancePage extends StatelessWidget {
         ),
         Section(
           title: 'Debiti · ${totalDebt.toStringAsFixed(2)} € rimanenti',
+          id: 'debts',
           action: IconButton(
             tooltip: 'Aggiungi debito',
             icon: const Icon(Icons.add),
@@ -1815,6 +2268,8 @@ class GoalsPage extends StatelessWidget {
   Widget build(BuildContext c) => PageBody(
     title: 'Obiettivi',
     subtitle: 'Risparmi e progetti, organizzati con chiarezza',
+    state: s,
+    pageId: 'goals',
     children: [
       Section(
         title: 'Obiettivi economici',
@@ -1882,6 +2337,8 @@ class DeadlinesPage extends StatelessWidget {
     return PageBody(
       title: 'Scadenze',
       subtitle: 'Tutto sotto controllo, senza sorprese',
+      state: s,
+      pageId: 'deadlines',
       children: [
         Section(
           title: 'In programma',
@@ -1960,16 +2417,20 @@ class WorkInProgressPage extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.icon,
+    required this.state,
   });
 
   final String title;
   final String subtitle;
   final IconData icon;
+  final AppState state;
 
   @override
   Widget build(BuildContext context) => PageBody(
     title: title,
     subtitle: subtitle,
+    state: state,
+    pageId: title.toLowerCase(),
     children: [
       Section(
         title: 'Work in progress',
@@ -1991,6 +2452,8 @@ class StudyPage extends StatelessWidget {
   Widget build(BuildContext context) => PageBody(
     title: 'Studio',
     subtitle: 'Scegli con chiarezza la tua prossima lettura',
+    state: s,
+    pageId: 'study',
     children: [
       Section(
         title: 'Coda di lettura',
@@ -2081,6 +2544,8 @@ class CyclesPage extends StatelessWidget {
   Widget build(BuildContext context) => PageBody(
     title: 'Cicli',
     subtitle: 'Raccogli qui ciò che smisterai e pianificherai più avanti',
+    state: s,
+    pageId: 'cycles',
     children: [
       Section(
         title: 'Da smistare',
@@ -2199,9 +2664,12 @@ class _CalendarPageState extends State<CalendarPage> {
     return PageBody(
       title: 'Calendario',
       subtitle: 'Decidi cosa fare e quando farlo',
+      state: widget.s,
+      pageId: 'calendar',
       children: [
         Section(
           title: '${monthNames[visibleMonth.month - 1]} ${visibleMonth.year}',
+          id: 'month',
           action: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -2984,6 +3452,163 @@ class _ProjectFolderDetailPageState extends State<ProjectFolderDetailPage> {
   }
 }
 
+class ChecklistsPage extends StatelessWidget {
+  const ChecklistsPage(this.s, {super.key});
+
+  final AppState s;
+
+  @override
+  Widget build(BuildContext context) => PageBody(
+    title: 'Check lists',
+    subtitle: 'Liste riutilizzabili, ordinate in cartelle',
+    state: s,
+    pageId: 'checklists',
+    children: [
+      Section(
+        title: 'Le tue cartelle',
+        id: 'folders',
+        action: IconButton(
+          tooltip: 'Nuova cartella',
+          icon: const Icon(Icons.create_new_folder_outlined),
+          onPressed: () async {
+            final title = await _textDialog(
+              context,
+              'Nuova cartella',
+              hint: 'Es. Valigia per il weekend',
+            );
+            if (title?.isNotEmpty == true) s.addChecklistFolder(title!);
+          },
+        ),
+        child: s.checklistFolders.isEmpty
+            ? const _EmptyState(
+                icon: Icons.checklist_outlined,
+                message: 'Crea una cartella per la tua prima checklist.',
+              )
+            : Column(
+                children: s.checklistFolders
+                    .map(
+                      (folder) => Card.outlined(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        clipBehavior: Clip.antiAlias,
+                        child: ExpansionTile(
+                          leading: const Icon(Icons.folder_outlined),
+                          title: Text(
+                            folder.title,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          subtitle: Text(
+                            '${folder.entries.where((entry) => entry.done).length} di '
+                            '${folder.entries.length} completati',
+                          ),
+                          childrenPadding: const EdgeInsets.fromLTRB(
+                            16,
+                            0,
+                            8,
+                            12,
+                          ),
+                          children: [
+                            LinearProgressIndicator(
+                              value: folder.progress,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            const SizedBox(height: 8),
+                            ...folder.entries.map(
+                              (entry) => CheckboxListTile(
+                                contentPadding: EdgeInsets.zero,
+                                value: entry.done,
+                                onChanged: (_) => s.toggleChecklistEntry(entry),
+                                title: Text(
+                                  entry.title,
+                                  style: TextStyle(
+                                    decoration: entry.done
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                                  ),
+                                ),
+                                secondary: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      tooltip: 'Modifica',
+                                      icon: const Icon(Icons.edit_outlined),
+                                      onPressed: () async {
+                                        final title = await _textDialog(
+                                          context,
+                                          'Modifica elemento',
+                                          initialValue: entry.title,
+                                        );
+                                        if (title?.isNotEmpty == true) {
+                                          s.updateChecklistEntry(entry, title!);
+                                        }
+                                      },
+                                    ),
+                                    IconButton(
+                                      tooltip: 'Elimina',
+                                      icon: const Icon(Icons.delete_outline),
+                                      onPressed: () =>
+                                          s.removeChecklistEntry(folder, entry),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                FilledButton.tonalIcon(
+                                  icon: const Icon(Icons.add),
+                                  label: const Text('Aggiungi elemento'),
+                                  onPressed: () async {
+                                    final title = await _textDialog(
+                                      context,
+                                      'Nuovo elemento',
+                                      hint: 'Cosa vuoi ricordare?',
+                                    );
+                                    if (title?.isNotEmpty == true) {
+                                      s.addChecklistEntry(folder, title!);
+                                    }
+                                  },
+                                ),
+                                OutlinedButton.icon(
+                                  icon: const Icon(Icons.edit_outlined),
+                                  label: const Text('Rinomina'),
+                                  onPressed: () async {
+                                    final title = await _textDialog(
+                                      context,
+                                      'Rinomina cartella',
+                                      initialValue: folder.title,
+                                    );
+                                    if (title?.isNotEmpty == true) {
+                                      s.updateChecklistFolder(folder, title!);
+                                    }
+                                  },
+                                ),
+                                TextButton.icon(
+                                  icon: const Icon(Icons.delete_outline),
+                                  label: const Text('Elimina cartella'),
+                                  onPressed: () async {
+                                    if (await _confirmDelete(
+                                      context,
+                                      folder.title,
+                                    )) {
+                                      s.removeChecklistFolder(folder);
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+      ),
+    ],
+  );
+}
+
 class SettingsPage extends StatelessWidget {
   const SettingsPage(this.s, {super.key, this.cloudEmail, this.onSignOut});
 
@@ -3005,6 +3630,8 @@ class SettingsPage extends StatelessWidget {
   Widget build(BuildContext c) => PageBody(
     title: 'Impostazioni',
     subtitle: 'Personalizza la tua esperienza',
+    state: s,
+    pageId: 'settings',
     children: [
       Section(
         title: 'Aspetto',
@@ -3110,6 +3737,46 @@ class SettingsPage extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               'Le immagini vengono ridotte e salvate insieme ai dati del tuo account.',
+              style: Theme.of(c).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+      Section(
+        title: 'Organizzazione della giornata',
+        id: 'day_organization',
+        child: Column(
+          children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Modalità Buonanotte'),
+              subtitle: const Text(
+                'Richiede almeno un’attività programmata prima di chiudere la giornata.',
+              ),
+              value: s.bedtimeMode,
+              onChanged: s.setBedtimeMode,
+            ),
+            const Divider(),
+            DropdownButtonFormField<int>(
+              initialValue: s.dayResetHour,
+              decoration: const InputDecoration(
+                labelText: 'Ora del cambio giornata automatico',
+                prefixIcon: Icon(Icons.schedule),
+              ),
+              items: List.generate(
+                24,
+                (hour) => DropdownMenuItem(
+                  value: hour,
+                  child: Text('${hour.toString().padLeft(2, '0')}:00'),
+                ),
+              ),
+              onChanged: (hour) {
+                if (hour != null) s.setDayResetHour(hour);
+              },
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Al cambio giornata le attività completate vengono archiviate; quelle incomplete restano recuperabili in Oggi.',
               style: Theme.of(c).textTheme.bodySmall,
             ),
           ],
