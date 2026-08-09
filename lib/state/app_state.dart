@@ -27,7 +27,13 @@ class AppState extends ChangeNotifier {
   List<ProjectItem> projects = [];
   List<PhotoWidgetItem> photoWidgets = [];
   List<ChecklistFolder> checklistFolders = [];
+  List<RoutineItem> routines = [];
   Map<String, bool> sectionVisibility = {};
+  Map<String, List<String>> sectionOrder = {};
+  Map<String, String> pageBackgroundImages = {};
+  Map<String, bool> pageUsesCustomBackground = {};
+  double backgroundTransparency = 0.82;
+  double panelTransparency = 0;
   bool bedtimeMode = false;
   int dayResetHour = 4;
   late DateTime activeDay;
@@ -147,6 +153,9 @@ class AppState extends ChangeNotifier {
       checklistFolders = items('checklistFolders')
           .map((e) => ChecklistFolder.fromJson(Map<String, dynamic>.from(e)))
           .toList();
+      routines = items(
+        'routines',
+      ).map((e) => RoutineItem.fromJson(Map<String, dynamic>.from(e))).toList();
       darkMode = j['darkMode'] ?? false;
       themeSeedValue = (j['themeSeedValue'] as num?)?.toInt() ?? 0xff6558d3;
       backgroundImageBase64 = j['backgroundImageBase64'] as String?;
@@ -156,6 +165,21 @@ class AppState extends ChangeNotifier {
       sectionVisibility = Map<String, bool>.from(
         j['sectionVisibility'] as Map? ?? const {},
       );
+      sectionOrder = (j['sectionOrder'] as Map? ?? const {}).map(
+        (key, value) =>
+            MapEntry(key.toString(), List<String>.from(value as List<dynamic>)),
+      );
+      pageBackgroundImages = Map<String, String>.from(
+        j['pageBackgroundImages'] as Map? ?? const {},
+      );
+      pageUsesCustomBackground = Map<String, bool>.from(
+        j['pageUsesCustomBackground'] as Map? ?? const {},
+      );
+      backgroundTransparency =
+          (j['backgroundTransparency'] as num?)?.toDouble().clamp(0, 0.95) ??
+          0.82;
+      panelTransparency =
+          (j['panelTransparency'] as num?)?.toDouble().clamp(0, 0.8) ?? 0;
       final savedActiveDay = j['activeDay'] as String?;
       activeDay = savedActiveDay == null
           ? _effectiveDay(_clock())
@@ -182,11 +206,17 @@ class AppState extends ChangeNotifier {
     'projects': projects.map((e) => e.toJson()).toList(),
     'photoWidgets': photoWidgets.map((e) => e.toJson()).toList(),
     'checklistFolders': checklistFolders.map((e) => e.toJson()).toList(),
+    'routines': routines.map((e) => e.toJson()).toList(),
     'darkMode': darkMode,
     'themeSeedValue': themeSeedValue,
     'backgroundImageBase64': backgroundImageBase64,
     'monthlySalary': monthlySalary,
     'sectionVisibility': sectionVisibility,
+    'sectionOrder': sectionOrder,
+    'pageBackgroundImages': pageBackgroundImages,
+    'pageUsesCustomBackground': pageUsesCustomBackground,
+    'backgroundTransparency': backgroundTransparency,
+    'panelTransparency': panelTransparency,
     'bedtimeMode': bedtimeMode,
     'dayResetHour': dayResetHour,
     'activeDay': _dayToJson(activeDay),
@@ -280,6 +310,46 @@ class AppState extends ChangeNotifier {
 
   void setSectionVisible(String pageId, String sectionId, bool visible) {
     sectionVisibility['$pageId::$sectionId'] = visible;
+    _changed();
+  }
+
+  void setSectionOrder(String pageId, List<String> order) {
+    sectionOrder[pageId] = List<String>.from(order);
+    _changed();
+  }
+
+  String? backgroundForPage(String pageId) =>
+      pageUsesCustomBackground[pageId] == true
+      ? pageBackgroundImages[pageId]
+      : backgroundImageBase64;
+
+  bool usesCustomBackgroundForPage(String pageId) =>
+      pageUsesCustomBackground[pageId] ?? false;
+
+  void setPageUsesCustomBackground(String pageId, bool value) {
+    pageUsesCustomBackground[pageId] = value;
+    _changed();
+  }
+
+  void setPageBackgroundImage(String pageId, String imageBase64) {
+    pageBackgroundImages[pageId] = imageBase64;
+    pageUsesCustomBackground[pageId] = true;
+    _changed();
+  }
+
+  void removePageBackgroundImage(String pageId) {
+    pageBackgroundImages.remove(pageId);
+    pageUsesCustomBackground[pageId] = false;
+    _changed();
+  }
+
+  void setBackgroundTransparency(double value) {
+    backgroundTransparency = value.clamp(0, 0.95);
+    _changed();
+  }
+
+  void setPanelTransparency(double value) {
+    panelTransparency = value.clamp(0, 0.8);
     _changed();
   }
 
@@ -619,6 +689,47 @@ class AppState extends ChangeNotifier {
 
   void removeChecklistEntry(ChecklistFolder folder, ChecklistEntry entry) {
     folder.entries.remove(entry);
+    _changed();
+  }
+
+  void addRoutine(String title, int targetCount, RoutinePeriod period) {
+    routines.add(
+      RoutineItem(
+        id: _id(),
+        title: title,
+        targetCount: targetCount,
+        period: period,
+      ),
+    );
+    _changed();
+  }
+
+  void updateRoutine(
+    RoutineItem routine,
+    String title,
+    int targetCount,
+    RoutinePeriod period,
+  ) {
+    routine.title = title;
+    routine.targetCount = targetCount;
+    routine.period = period;
+    _changed();
+  }
+
+  void removeRoutine(RoutineItem routine) {
+    routines.remove(routine);
+    _changed();
+  }
+
+  void completeRoutine(RoutineItem routine) {
+    routine.completions.add(_clock());
+    _changed();
+  }
+
+  void undoLastRoutineCompletion(RoutineItem routine) {
+    if (routine.completions.isEmpty) return;
+    routine.completions.sort();
+    routine.completions.removeLast();
     _changed();
   }
 

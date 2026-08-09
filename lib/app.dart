@@ -43,8 +43,16 @@ class _LifeHubAppState extends State<LifeHubApp> {
     supportedLocales: const [Locale('it')],
     localizationsDelegates: GlobalMaterialLocalizations.delegates,
     themeMode: state.darkMode ? ThemeMode.dark : ThemeMode.light,
-    theme: _theme(Brightness.light, Color(state.themeSeedValue)),
-    darkTheme: _theme(Brightness.dark, Color(state.themeSeedValue)),
+    theme: _theme(
+      Brightness.light,
+      Color(state.themeSeedValue),
+      state.panelTransparency,
+    ),
+    darkTheme: _theme(
+      Brightness.dark,
+      Color(state.themeSeedValue),
+      state.panelTransparency,
+    ),
     home: state.ready
         ? LifeHubShell(
             state: state,
@@ -55,15 +63,22 @@ class _LifeHubAppState extends State<LifeHubApp> {
   );
 }
 
-ThemeData _theme(Brightness b, Color seedColor) {
+ThemeData _theme(Brightness b, Color seedColor, double panelTransparency) {
   final dark = b == Brightness.dark;
+  final colorScheme = ColorScheme.fromSeed(seedColor: seedColor, brightness: b);
   return ThemeData(
-    colorScheme: ColorScheme.fromSeed(seedColor: seedColor, brightness: b),
+    colorScheme: colorScheme,
     useMaterial3: true,
     scaffoldBackgroundColor: dark
         ? const Color(0xff101114)
         : const Color(0xfff7f7fb),
-    cardTheme: const CardThemeData(elevation: 0, margin: EdgeInsets.zero),
+    cardTheme: CardThemeData(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      color: colorScheme.surfaceContainerLow.withValues(
+        alpha: 1 - panelTransparency,
+      ),
+    ),
   );
 }
 
@@ -78,13 +93,13 @@ MemoryImage? _memoryImage(String? imageBase64) {
 
 Future<String?> _pickImageBase64(
   BuildContext context, {
-  int maxBytes = 600000,
+  int maxBytes = 2000000,
 }) async {
   try {
     final file = await ImagePicker().pickImage(
       source: ImageSource.gallery,
-      maxWidth: 1600,
-      imageQuality: 72,
+      maxWidth: 2400,
+      imageQuality: 84,
     );
     if (file == null) return null;
     final bytes = await file.readAsBytes();
@@ -176,6 +191,21 @@ class _LifeHubShellState extends State<LifeHubShell> {
     _ => 4,
   };
 
+  String get selectedPageId => switch (selectedPage) {
+    HubPage.today => 'today',
+    HubPage.finance => 'finance',
+    HubPage.goals => 'goals',
+    HubPage.deadlines => 'deadlines',
+    HubPage.training => 'allenamento',
+    HubPage.nutrition => 'alimentazione',
+    HubPage.study => 'study',
+    HubPage.cycles => 'cycles',
+    HubPage.calendar => 'calendar',
+    HubPage.routine => 'routine',
+    HubPage.checklists => 'checklists',
+    HubPage.settings => 'settings',
+  };
+
   Widget _page() => switch (selectedPage) {
     HubPage.today => TodayPage(widget.state),
     HubPage.finance => FinancePage(widget.state),
@@ -196,12 +226,7 @@ class _LifeHubShellState extends State<LifeHubShell> {
     HubPage.study => StudyPage(widget.state),
     HubPage.cycles => CyclesPage(widget.state),
     HubPage.calendar => CalendarPage(widget.state),
-    HubPage.routine => WorkInProgressPage(
-      state: widget.state,
-      title: 'Routine',
-      subtitle: 'Costruisci e monitora le abitudini che contano',
-      icon: Icons.repeat,
-    ),
+    HubPage.routine => RoutinePage(widget.state),
     HubPage.checklists => ChecklistsPage(widget.state),
     HubPage.settings => SettingsPage(
       widget.state,
@@ -321,7 +346,9 @@ class _LifeHubShellState extends State<LifeHubShell> {
             ),
           ],
         );
-        final background = _memoryImage(widget.state.backgroundImageBase64);
+        final background = _memoryImage(
+          widget.state.backgroundForPage(selectedPageId),
+        );
         return Scaffold(
           appBar: AppBar(
             title: const Text(
@@ -345,9 +372,9 @@ class _LifeHubShellState extends State<LifeHubShell> {
                     ),
                   ),
                   child: ColoredBox(
-                    color: Theme.of(
-                      c,
-                    ).scaffoldBackgroundColor.withValues(alpha: 0.82),
+                    color: Theme.of(c).scaffoldBackgroundColor.withValues(
+                      alpha: widget.state.backgroundTransparency,
+                    ),
                     child: pageContent,
                   ),
                 ),
@@ -405,44 +432,175 @@ class PageBody extends StatelessWidget {
   final AppState? state;
   final String? pageId;
 
+  List<Section> _orderedSections() {
+    final sections = children.whereType<Section>().toList();
+    final order = state?.sectionOrder[pageId ?? title] ?? const <String>[];
+    final originalIndexes = {
+      for (var index = 0; index < sections.length; index++)
+        sections[index].visibilityId: index,
+    };
+    sections.sort((a, b) {
+      final aIndex = order.indexOf(a.visibilityId);
+      final bIndex = order.indexOf(b.visibilityId);
+      final effectiveA = aIndex < 0
+          ? order.length + (originalIndexes[a.visibilityId] ?? 0)
+          : aIndex;
+      final effectiveB = bIndex < 0
+          ? order.length + (originalIndexes[b.visibilityId] ?? 0)
+          : bIndex;
+      return effectiveA.compareTo(effectiveB);
+    });
+    return sections;
+  }
+
   Future<void> _editSections(BuildContext context) async {
     final appState = state;
     if (appState == null) return;
-    final sections = children.whereType<Section>().toList();
+    final currentPageId = pageId ?? title;
+    final sections = _orderedSections();
     await showDialog<void>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: Text('Personalizza $title'),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 24,
+          ),
           content: SizedBox(
             width: 430,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: sections
-                    .map(
-                      (section) => SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(section.title),
-                        subtitle: const Text(
-                          'I dati restano salvati e sincronizzati nel cloud.',
+            height: math.min(MediaQuery.sizeOf(context).height * 0.72, 650),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Trascina le sezioni per cambiarne l’ordine.'),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ReorderableListView.builder(
+                    buildDefaultDragHandles: false,
+                    itemCount: sections.length,
+                    onReorderItem: (oldIndex, newIndex) {
+                      final section = sections.removeAt(oldIndex);
+                      sections.insert(newIndex, section);
+                      appState.setSectionOrder(
+                        currentPageId,
+                        sections.map((item) => item.visibilityId).toList(),
+                      );
+                      setDialogState(() {});
+                    },
+                    itemBuilder: (context, index) {
+                      final section = sections[index];
+                      return Card.outlined(
+                        key: ValueKey(section.visibilityId),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.only(
+                            left: 4,
+                            right: 8,
+                          ),
+                          leading: ReorderableDragStartListener(
+                            index: index,
+                            child: const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: Icon(Icons.drag_handle),
+                            ),
+                          ),
+                          title: Text(section.title),
+                          trailing: Switch(
+                            value: appState.isSectionVisible(
+                              currentPageId,
+                              section.visibilityId,
+                            ),
+                            onChanged: (value) {
+                              appState.setSectionVisible(
+                                currentPageId,
+                                section.visibilityId,
+                                value,
+                              );
+                              setDialogState(() {});
+                            },
+                          ),
                         ),
-                        value: appState.isSectionVisible(
-                          pageId ?? title,
-                          section.visibilityId,
-                        ),
-                        onChanged: (value) {
-                          appState.setSectionVisible(
-                            pageId ?? title,
-                            section.visibilityId,
-                            value,
-                          );
+                      );
+                    },
+                  ),
+                ),
+                const Divider(height: 24),
+                Text(
+                  'Sfondo della pagina',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(
+                      value: false,
+                      icon: Icon(Icons.settings_backup_restore),
+                      label: Text('Predefinito'),
+                    ),
+                    ButtonSegment(
+                      value: true,
+                      icon: Icon(Icons.image_outlined),
+                      label: Text('Personale'),
+                    ),
+                  ],
+                  selected: {
+                    appState.usesCustomBackgroundForPage(currentPageId),
+                  },
+                  onSelectionChanged: (selection) {
+                    appState.setPageUsesCustomBackground(
+                      currentPageId,
+                      selection.first,
+                    );
+                    setDialogState(() {});
+                  },
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.tonalIcon(
+                      icon: const Icon(Icons.photo_library_outlined),
+                      label: Text(
+                        appState.pageBackgroundImages[currentPageId] == null
+                            ? 'Scegli immagine'
+                            : 'Cambia immagine',
+                      ),
+                      onPressed: () async {
+                        final image = await _pickImageBase64(
+                          context,
+                          maxBytes: 2000000,
+                        );
+                        if (image != null) {
+                          appState.setPageBackgroundImage(currentPageId, image);
+                          setDialogState(() {});
+                        }
+                      },
+                    ),
+                    if (appState.pageBackgroundImages[currentPageId] != null)
+                      TextButton.icon(
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Rimuovi'),
+                        onPressed: () {
+                          appState.removePageBackgroundImage(currentPageId);
                           setDialogState(() {});
                         },
                       ),
-                    )
-                    .toList(),
-              ),
+                  ],
+                ),
+                if (appState.usesCustomBackgroundForPage(currentPageId) &&
+                    appState.pageBackgroundImages[currentPageId] == null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      'Scegli un’immagine; fino ad allora la pagina resterà senza sfondo.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+              ],
             ),
           ),
           actions: [
@@ -458,10 +616,18 @@ class PageBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext c) {
-    final visibleChildren = children.where((child) {
-      if (state == null || child is! Section) return true;
-      return state!.isSectionVisible(pageId ?? title, child.visibilityId);
-    }).toList();
+    final orderedSections = _orderedSections();
+    final visibleChildren = state == null
+        ? children
+        : <Widget>[
+            ...orderedSections.where(
+              (section) => state!.isSectionVisible(
+                pageId ?? title,
+                section.visibilityId,
+              ),
+            ),
+            ...children.where((child) => child is! Section),
+          ];
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
@@ -2443,6 +2609,487 @@ class WorkInProgressPage extends StatelessWidget {
   );
 }
 
+String _routinePeriodLabel(RoutinePeriod period) => switch (period) {
+  RoutinePeriod.day => 'giorno',
+  RoutinePeriod.week => 'settimana',
+  RoutinePeriod.month => 'mese',
+};
+
+DateTime _routinePeriodStart(DateTime now, RoutinePeriod period) =>
+    switch (period) {
+      RoutinePeriod.day => DateTime(now.year, now.month, now.day),
+      RoutinePeriod.week => DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).subtract(Duration(days: now.weekday - 1)),
+      RoutinePeriod.month => DateTime(now.year, now.month),
+    };
+
+int _routineCurrentCount(RoutineItem routine) {
+  final start = _routinePeriodStart(DateTime.now(), routine.period);
+  return routine.completions
+      .where((completion) => !completion.isBefore(start))
+      .length;
+}
+
+Future<({String title, int target, RoutinePeriod period})?> _routineDialog(
+  BuildContext context, {
+  RoutineItem? routine,
+}) async {
+  final titleController = TextEditingController(text: routine?.title ?? '');
+  final targetController = TextEditingController(
+    text: routine?.targetCount.toString() ?? '1',
+  );
+  var period = routine?.period ?? RoutinePeriod.day;
+  String? error;
+  return showDialog<({String title, int target, RoutinePeriod period})>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: Text(routine == null ? 'Nuova routine' : 'Modifica routine'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Nome della routine',
+                  hintText: 'Es. Bere acqua',
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: targetController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Numero di volte',
+                  errorText: error,
+                ),
+              ),
+              const SizedBox(height: 14),
+              DropdownButtonFormField<RoutinePeriod>(
+                initialValue: period,
+                decoration: const InputDecoration(labelText: 'Frequenza'),
+                items: RoutinePeriod.values
+                    .map(
+                      (value) => DropdownMenuItem(
+                        value: value,
+                        child: Text('Ogni ${_routinePeriodLabel(value)}'),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) setDialogState(() => period = value);
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final title = titleController.text.trim();
+              final target = int.tryParse(targetController.text.trim());
+              if (title.isEmpty ||
+                  target == null ||
+                  target < 1 ||
+                  target > 99) {
+                setDialogState(
+                  () => error = 'Inserisci un numero compreso tra 1 e 99',
+                );
+                return;
+              }
+              Navigator.pop(context, (
+                title: title,
+                target: target,
+                period: period,
+              ));
+            },
+            child: const Text('Salva'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class RoutinePage extends StatelessWidget {
+  const RoutinePage(this.s, {super.key});
+
+  final AppState s;
+
+  @override
+  Widget build(BuildContext context) => PageBody(
+    title: 'Routine',
+    subtitle: 'Costruisci e monitora le abitudini che contano',
+    state: s,
+    pageId: 'routine',
+    children: [
+      Section(
+        title: 'Le tue routine',
+        id: 'routines',
+        action: IconButton(
+          tooltip: 'Aggiungi routine',
+          icon: const Icon(Icons.add),
+          onPressed: () async {
+            final result = await _routineDialog(context);
+            if (result != null) {
+              s.addRoutine(result.title, result.target, result.period);
+            }
+          },
+        ),
+        child: s.routines.isEmpty
+            ? const _EmptyState(
+                icon: Icons.repeat,
+                message: 'Aggiungi una routine per iniziare a monitorarla.',
+              )
+            : Column(
+                children: s.routines
+                    .map(
+                      (routine) => Card.outlined(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.fromLTRB(
+                            16,
+                            8,
+                            8,
+                            8,
+                          ),
+                          leading: CircleAvatar(
+                            child: Text('${_routineCurrentCount(routine)}'),
+                          ),
+                          title: Text(
+                            routine.title,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          subtitle: Text(
+                            '${routine.targetCount} volte al ${_routinePeriodLabel(routine.period)}',
+                          ),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => RoutineDetailPage(s, routine),
+                            ),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton.filledTonal(
+                                tooltip: 'Segna come fatta',
+                                icon: const Icon(Icons.add_task),
+                                onPressed: () => s.completeRoutine(routine),
+                              ),
+                              PopupMenuButton<String>(
+                                onSelected: (action) async {
+                                  if (action == 'edit') {
+                                    final result = await _routineDialog(
+                                      context,
+                                      routine: routine,
+                                    );
+                                    if (result != null) {
+                                      s.updateRoutine(
+                                        routine,
+                                        result.title,
+                                        result.target,
+                                        result.period,
+                                      );
+                                    }
+                                  } else if (action == 'delete' &&
+                                      await _confirmDelete(
+                                        context,
+                                        routine.title,
+                                      )) {
+                                    s.removeRoutine(routine);
+                                  }
+                                },
+                                itemBuilder: (context) => const [
+                                  PopupMenuItem(
+                                    value: 'edit',
+                                    child: Text('Modifica'),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'delete',
+                                    child: Text('Elimina'),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+      ),
+    ],
+  );
+}
+
+class RoutineDetailPage extends StatefulWidget {
+  const RoutineDetailPage(this.s, this.routine, {super.key});
+
+  final AppState s;
+  final RoutineItem routine;
+
+  @override
+  State<RoutineDetailPage> createState() => _RoutineDetailPageState();
+}
+
+class _RoutineDetailPageState extends State<RoutineDetailPage> {
+  int durationDays = 30;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.s.addListener(_refresh);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    widget.s.removeListener(_refresh);
+    super.dispose();
+  }
+
+  int get expectedCompletions => switch (widget.routine.period) {
+    RoutinePeriod.day => widget.routine.targetCount * durationDays,
+    RoutinePeriod.week =>
+      (widget.routine.targetCount * durationDays / 7).ceil(),
+    RoutinePeriod.month =>
+      (widget.routine.targetCount * durationDays / 30.44).ceil(),
+  };
+
+  List<DateTime> get visibleCompletions {
+    final now = DateTime.now();
+    final start = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(Duration(days: durationDays - 1));
+    return widget.routine.completions
+        .where((completion) => !completion.isBefore(start))
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final routine = widget.routine;
+    final completions = visibleCompletions;
+    final adherence = expectedCompletions == 0
+        ? 0.0
+        : (completions.length / expectedCompletions).clamp(0, 1).toDouble();
+    final history = [...routine.completions]..sort((a, b) => b.compareTo(a));
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(routine.title),
+        actions: [
+          IconButton(
+            tooltip: 'Modifica routine',
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: () async {
+              final result = await _routineDialog(context, routine: routine);
+              if (result != null) {
+                widget.s.updateRoutine(
+                  routine,
+                  result.title,
+                  result.target,
+                  result.period,
+                );
+              }
+            },
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Section(
+            title:
+                '${routine.targetCount} volte al ${_routinePeriodLabel(routine.period)}',
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                FilledButton.icon(
+                  icon: const Icon(Icons.add_task),
+                  label: const Text('Segna come fatta'),
+                  onPressed: () => widget.s.completeRoutine(routine),
+                ),
+                if (routine.completions.isNotEmpty)
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.undo),
+                    label: const Text('Annulla ultima'),
+                    onPressed: () =>
+                        widget.s.undoLastRoutineCompletion(routine),
+                  ),
+              ],
+            ),
+          ),
+          Section(
+            title: 'Andamento',
+            action: DropdownButton<int>(
+              value: durationDays,
+              underline: const SizedBox.shrink(),
+              items: const [
+                DropdownMenuItem(value: 7, child: Text('7 giorni')),
+                DropdownMenuItem(value: 30, child: Text('30 giorni')),
+                DropdownMenuItem(value: 90, child: Text('90 giorni')),
+                DropdownMenuItem(value: 365, child: Text('1 anno')),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => durationDays = value);
+              },
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    MetricCard(
+                      icon: Icons.done_all,
+                      label: 'Esecuzioni',
+                      value: '${completions.length}',
+                    ),
+                    MetricCard(
+                      icon: Icons.track_changes,
+                      label: 'Obiettivo stimato',
+                      value: '$expectedCompletions',
+                    ),
+                    MetricCard(
+                      icon: Icons.insights,
+                      label: 'Regolarità',
+                      value: '${(adherence * 100).round()}%',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                RoutineBarChart(
+                  completions: completions,
+                  durationDays: durationDays,
+                ),
+              ],
+            ),
+          ),
+          Section(
+            title: 'Cronologia',
+            child: history.isEmpty
+                ? const _EmptyState(
+                    icon: Icons.history,
+                    message: 'Non hai ancora registrato esecuzioni.',
+                  )
+                : Column(
+                    children: history
+                        .take(20)
+                        .map(
+                          (completion) => ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.check_circle_outline),
+                            title: Text(_date(completion)),
+                            trailing: Text(
+                              '${completion.hour.toString().padLeft(2, '0')}:'
+                              '${completion.minute.toString().padLeft(2, '0')}',
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class RoutineBarChart extends StatelessWidget {
+  const RoutineBarChart({
+    super.key,
+    required this.completions,
+    required this.durationDays,
+  });
+
+  final List<DateTime> completions;
+  final int durationDays;
+
+  @override
+  Widget build(BuildContext context) {
+    final binCount = durationDays <= 7
+        ? 7
+        : durationDays <= 30
+        ? 10
+        : durationDays <= 90
+        ? 13
+        : 12;
+    final daysPerBin = (durationDays / binCount).ceil();
+    final today = DateTime.now();
+    final start = DateTime(
+      today.year,
+      today.month,
+      today.day,
+    ).subtract(Duration(days: durationDays - 1));
+    final values = List<int>.filled(binCount, 0);
+    for (final completion in completions) {
+      final day = DateTime(completion.year, completion.month, completion.day);
+      final index = day.difference(start).inDays ~/ daysPerBin;
+      if (index >= 0 && index < values.length) values[index]++;
+    }
+    final maximum = math.max(1, values.fold<int>(0, math.max));
+    return SizedBox(
+      height: 190,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: List.generate(values.length, (index) {
+          final value = values[index];
+          final rangeStart = start.add(Duration(days: index * daysPerBin));
+          final calculatedEnd = rangeStart.add(Duration(days: daysPerBin - 1));
+          final rangeEnd = calculatedEnd.isAfter(today) ? today : calculatedEnd;
+          return Expanded(
+            child: Tooltip(
+              message:
+                  '${_date(rangeStart)}${daysPerBin > 1 ? ' – ${_date(rangeEnd)}' : ''}: $value',
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      '$value',
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                    const SizedBox(height: 4),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      height: math.max(5, 135 * value / maximum),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary,
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(6),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
 class StudyPage extends StatelessWidget {
   const StudyPage(this.s, {super.key});
 
@@ -3692,6 +4339,50 @@ class SettingsPage extends StatelessWidget {
         ),
       ),
       Section(
+        title: 'Trasparenza',
+        id: 'transparency',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Trasparenza dello sfondo · ${(s.backgroundTransparency * 100).round()}%',
+              style: Theme.of(
+                c,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            Slider(
+              value: s.backgroundTransparency,
+              min: 0,
+              max: 0.95,
+              divisions: 19,
+              label: '${(s.backgroundTransparency * 100).round()}%',
+              onChanged: s.setBackgroundTransparency,
+            ),
+            const Text(
+              'Aumentandola, l’immagine di sfondo diventa più discreta.',
+            ),
+            const Divider(height: 28),
+            Text(
+              'Trasparenza dei pannelli · ${(s.panelTransparency * 100).round()}%',
+              style: Theme.of(
+                c,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            Slider(
+              value: s.panelTransparency,
+              min: 0,
+              max: 0.8,
+              divisions: 16,
+              label: '${(s.panelTransparency * 100).round()}%',
+              onChanged: s.setPanelTransparency,
+            ),
+            const Text(
+              'Regola quanto lo sfondo deve trasparire attraverso le schede.',
+            ),
+          ],
+        ),
+      ),
+      Section(
         title: 'Sfondo personale',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -3722,7 +4413,7 @@ class SettingsPage extends StatelessWidget {
                         : 'Cambia foto',
                   ),
                   onPressed: () async {
-                    final image = await _pickImageBase64(c, maxBytes: 900000);
+                    final image = await _pickImageBase64(c, maxBytes: 2000000);
                     if (image != null) s.setBackgroundImage(image);
                   },
                 ),

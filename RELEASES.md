@@ -5,6 +5,16 @@ Ogni aggiornamento completato produce due archivi nella cartella `releases/`:
 - `life_hub-source-vX.Y.Z.zip`: progetto Flutter completo, senza cronologia Git o file temporanei;
 - `life_hub-web-vX.Y.Z.zip`: applicazione web compilata, pronta per essere pubblicata su un servizio di hosting.
 
+## 0.9.0
+
+- riordino delle sezioni tramite trascinamento dal pannello Modifica;
+- sfondo personale diverso per ogni pagina oppure uso dello sfondo predefinito;
+- trasparenza regolabile separatamente per sfondo e pannelli;
+- immagini dei widget fino a 2 MB;
+- routine configurabili per giorno, settimana o mese;
+- registrazione delle esecuzioni, cronologia e grafici su 7, 30, 90 o 365 giorni;
+- piena compatibilità con i dati e le personalizzazioni delle versioni precedenti.
+
 ## 0.8.0
 
 - orario facoltativo per ogni attività nella pagina Oggi;
