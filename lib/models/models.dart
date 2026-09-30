@@ -211,18 +211,21 @@ class CalendarItem {
     required this.title,
     required this.date,
     this.done = false,
+    this.projectTaskId,
   });
 
   final String id;
   String title;
   DateTime date;
   bool done;
+  final String? projectTaskId;
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,
     'date': date.toIso8601String(),
     'done': done,
+    if (projectTaskId != null) 'projectTaskId': projectTaskId,
   };
 
   factory CalendarItem.fromJson(Map<String, dynamic> json) => CalendarItem(
@@ -230,6 +233,7 @@ class CalendarItem {
     title: json['title'] as String,
     date: DateTime.parse(json['date'] as String),
     done: json['done'] as bool? ?? false,
+    projectTaskId: json['projectTaskId'] as String?,
   );
 }
 

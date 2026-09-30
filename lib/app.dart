@@ -178,7 +178,7 @@ class _LifeHubShellState extends State<LifeHubShell> {
   static const primaryDestinations = [
     ('Oggi', Icons.today_outlined),
     ('Finanze', Icons.account_balance_wallet_outlined),
-    ('Obiettivi', Icons.flag_outlined),
+    ('Progetti', Icons.folder_outlined),
     ('Scadenze', Icons.event_outlined),
     ('Altro', Icons.apps_outlined),
   ];
@@ -209,7 +209,7 @@ class _LifeHubShellState extends State<LifeHubShell> {
   Widget _page() => switch (selectedPage) {
     HubPage.today => TodayPage(widget.state),
     HubPage.finance => FinancePage(widget.state),
-    HubPage.goals => GoalsPage(widget.state),
+    HubPage.goals => ProjectsPage(widget.state),
     HubPage.deadlines => DeadlinesPage(widget.state),
     HubPage.training => WorkInProgressPage(
       state: widget.state,
@@ -281,8 +281,8 @@ class _LifeHubShellState extends State<LifeHubShell> {
               ),
               _MoreMenuTile(
                 page: HubPage.cycles,
-                icon: Icons.autorenew,
-                title: 'Cicli',
+                icon: Icons.inbox_outlined,
+                title: 'Inbox',
               ),
               _MoreMenuTile(
                 page: HubPage.calendar,
@@ -1103,10 +1103,10 @@ class TodayPage extends StatelessWidget {
     final activeDeadlines = s.deadlines.where((item) => !item.done).toList()
       ..sort((a, b) => a.date.compareTo(b.date));
     final nextDeadline = activeDeadlines.firstOrNull;
-    final goalProgress = s.goals.isEmpty
+    final projectProgress = s.projects.isEmpty
         ? 0
-        : s.goals.fold<double>(0, (sum, item) => sum + item.progress) /
-              s.goals.length;
+        : s.projects.fold<double>(0, (sum, item) => sum + item.progress) /
+              s.projects.length;
     final urgent = activeDeadlines
         .where((item) => _daysUntil(item.date) <= 7)
         .take(3)
@@ -1399,9 +1399,9 @@ class TodayPage extends StatelessWidget {
                     value: nextDeadline?.title ?? 'Nessuna',
                   ),
                   MetricCard(
-                    icon: Icons.flag_outlined,
-                    label: 'Obiettivi',
-                    value: '${(goalProgress * 100).round()}% completati',
+                    icon: Icons.folder_outlined,
+                    label: 'Progetti',
+                    value: '${(projectProgress * 100).round()}% completati',
                   ),
                 ],
               ),
@@ -1874,6 +1874,35 @@ class FinancePage extends StatelessWidget {
               c,
             ).textTheme.displaySmall?.copyWith(fontWeight: FontWeight.bold),
           ),
+        ),
+        Section(
+          title: 'Obiettivi economici',
+          id: 'economic_goals',
+          action: IconButton(
+            tooltip: 'Nuovo obiettivo economico',
+            icon: const Icon(Icons.add),
+            onPressed: () async {
+              final result = await _goalDialog(c);
+              if (result != null) {
+                s.addEconomicGoal(
+                  result.title,
+                  result.target,
+                  result.saved,
+                  result.description,
+                );
+              }
+            },
+          ),
+          child: s.goals.isEmpty
+              ? const _EmptyState(
+                  icon: Icons.savings_outlined,
+                  message: 'Crea il tuo primo obiettivo economico.',
+                )
+              : Column(
+                  children: s.goals
+                      .map((goal) => _GoalCard(s: s, goal: goal))
+                      .toList(),
+                ),
         ),
         Section(
           title: 'Debiti · ${totalDebt.toStringAsFixed(2)} € rimanenti',
@@ -2426,47 +2455,21 @@ class _GoalDetailPageState extends State<GoalDetailPage> {
   }
 }
 
-class GoalsPage extends StatelessWidget {
-  const GoalsPage(this.s, {super.key});
+class ProjectsPage extends StatelessWidget {
+  const ProjectsPage(this.s, {super.key});
   final AppState s;
 
   @override
   Widget build(BuildContext c) => PageBody(
-    title: 'Obiettivi',
-    subtitle: 'Risparmi e progetti, organizzati con chiarezza',
+    title: 'Progetti',
+    subtitle: 'Trasforma le idee in azioni organizzate',
     state: s,
     pageId: 'goals',
     children: [
       Section(
-        title: 'Obiettivi economici',
-        action: IconButton(
-          tooltip: 'Nuovo obiettivo economico',
-          icon: const Icon(Icons.add),
-          onPressed: () async {
-            final result = await _goalDialog(c);
-            if (result != null) {
-              s.addEconomicGoal(
-                result.title,
-                result.target,
-                result.saved,
-                result.description,
-              );
-            }
-          },
-        ),
-        child: s.goals.isEmpty
-            ? const _EmptyState(
-                icon: Icons.savings_outlined,
-                message: 'Crea il tuo primo obiettivo economico.',
-              )
-            : Column(
-                children: s.goals
-                    .map((goal) => _GoalCard(s: s, goal: goal))
-                    .toList(),
-              ),
-      ),
-      Section(
-        title: 'Progetti',
+        title: 'I tuoi progetti',
+        // Mantiene le preferenze di visibilità salvate prima del cambio nome.
+        id: 'Progetti',
         action: IconButton(
           tooltip: 'Nuovo progetto',
           icon: const Icon(Icons.create_new_folder_outlined),
@@ -3189,7 +3192,7 @@ class CyclesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => PageBody(
-    title: 'Cicli',
+    title: 'Inbox',
     subtitle: 'Raccogli qui ciò che smisterai e pianificherai più avanti',
     state: s,
     pageId: 'cycles',
@@ -3740,6 +3743,235 @@ Future<({String title, DateTime? deadline})?> _projectTaskDialog(
   return result;
 }
 
+enum _ProjectTaskAction { schedule, move, edit, delete }
+
+enum _ProjectTaskDestination { unassigned, newFolder }
+
+Future<void> _scheduleProjectTask(
+  BuildContext context,
+  AppState state,
+  ProjectTask task,
+) async {
+  final today = DateTime.now();
+  final firstDate = DateTime(today.year, today.month, today.day);
+  final currentDeadline = task.deadline;
+  final initialDate =
+      currentDeadline != null && !currentDeadline.isBefore(firstDate)
+      ? currentDeadline
+      : firstDate;
+  final date = await showDatePicker(
+    context: context,
+    firstDate: firstDate,
+    lastDate: firstDate.add(const Duration(days: 3650)),
+    initialDate: initialDate,
+    helpText: 'Programma nel calendario',
+  );
+  if (date == null) return;
+  state.scheduleProjectTask(task, date);
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text('“${task.title}” è nel calendario per il ${_date(date)}.'),
+    ),
+  );
+}
+
+Future<void> _moveProjectTask(
+  BuildContext context,
+  AppState state,
+  ProjectItem project,
+  ProjectTask task, {
+  ProjectFolder? currentFolder,
+}) async {
+  final destination = await showModalBottomSheet<Object>(
+    context: context,
+    showDragHandle: true,
+    constraints: const BoxConstraints(maxWidth: 560),
+    builder: (context) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Text(
+                'Sposta “${task.title}”',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.inbox_outlined),
+              title: const Text('Senza cartella'),
+              trailing: currentFolder == null ? const Icon(Icons.check) : null,
+              onTap: () =>
+                  Navigator.pop(context, _ProjectTaskDestination.unassigned),
+            ),
+            ...project.folders.map(
+              (folder) => ListTile(
+                leading: const Icon(Icons.folder_outlined),
+                title: Text(folder.title),
+                trailing: identical(folder, currentFolder)
+                    ? const Icon(Icons.check)
+                    : null,
+                onTap: () => Navigator.pop(context, folder),
+              ),
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.create_new_folder_outlined),
+              title: const Text('Crea una nuova cartella'),
+              onTap: () =>
+                  Navigator.pop(context, _ProjectTaskDestination.newFolder),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+  if (destination == null || !context.mounted) return;
+
+  ProjectFolder? targetFolder;
+  if (destination is ProjectFolder) {
+    targetFolder = destination;
+  } else if (destination == _ProjectTaskDestination.newFolder) {
+    final title = await _textDialog(
+      context,
+      'Nuova cartella',
+      hint: 'Es. Preparazione, Acquisti, Documenti…',
+    );
+    if (title?.isNotEmpty != true) return;
+    targetFolder = state.addProjectFolder(project, title!);
+  }
+
+  state.moveProjectTask(project, task, targetFolder);
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        targetFolder == null
+            ? 'Azione spostata tra quelle senza cartella.'
+            : 'Azione spostata in “${targetFolder.title}”.',
+      ),
+    ),
+  );
+}
+
+class _ProjectTaskTile extends StatelessWidget {
+  const _ProjectTaskTile({
+    required this.state,
+    required this.project,
+    required this.task,
+    this.currentFolder,
+  });
+
+  final AppState state;
+  final ProjectItem project;
+  final ProjectTask task;
+  final ProjectFolder? currentFolder;
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+    contentPadding: EdgeInsets.zero,
+    onTap: () => state.toggleProjectTask(task),
+    title: Text(
+      task.title,
+      style: TextStyle(
+        decoration: task.done ? TextDecoration.lineThrough : null,
+      ),
+    ),
+    subtitle: task.deadline == null
+        ? const Text('Non programmata')
+        : Text('${_date(task.deadline!)} · ${_deadlineStatus(task.deadline!)}'),
+    trailing: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Checkbox(
+          value: task.done,
+          onChanged: (_) => state.toggleProjectTask(task),
+        ),
+        PopupMenuButton<_ProjectTaskAction>(
+          tooltip: 'Azioni',
+          icon: const Icon(Icons.more_vert),
+          onSelected: (action) async {
+            switch (action) {
+              case _ProjectTaskAction.schedule:
+                await _scheduleProjectTask(context, state, task);
+                break;
+              case _ProjectTaskAction.move:
+                await _moveProjectTask(
+                  context,
+                  state,
+                  project,
+                  task,
+                  currentFolder: currentFolder,
+                );
+                break;
+              case _ProjectTaskAction.edit:
+                final result = await _projectTaskDialog(context, task: task);
+                if (result != null) {
+                  state.updateProjectTask(task, result.title, result.deadline);
+                }
+                break;
+              case _ProjectTaskAction.delete:
+                if (await _confirmDelete(context, task.title)) {
+                  state.removeProjectTask(project, task);
+                }
+                break;
+            }
+          },
+          itemBuilder: (context) => const [
+            PopupMenuItem(
+              value: _ProjectTaskAction.schedule,
+              child: Row(
+                children: [
+                  Icon(Icons.event_available_outlined),
+                  SizedBox(width: 12),
+                  Text('Programma'),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: _ProjectTaskAction.move,
+              child: Row(
+                children: [
+                  Icon(Icons.drive_file_move_outline),
+                  SizedBox(width: 12),
+                  Text('Sposta in'),
+                ],
+              ),
+            ),
+            PopupMenuDivider(),
+            PopupMenuItem(
+              value: _ProjectTaskAction.edit,
+              child: Row(
+                children: [
+                  Icon(Icons.edit_outlined),
+                  SizedBox(width: 12),
+                  Text('Modifica'),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: _ProjectTaskAction.delete,
+              child: Row(
+                children: [
+                  Icon(Icons.delete_outline),
+                  SizedBox(width: 12),
+                  Text('Elimina'),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
 class ProjectDetailPage extends StatefulWidget {
   const ProjectDetailPage({super.key, required this.s, required this.project});
 
@@ -3861,57 +4093,10 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                 : Column(
                     children: tasks
                         .map(
-                          (task) => CheckboxListTile(
-                            contentPadding: EdgeInsets.zero,
-                            value: task.done,
-                            onChanged: (_) => widget.s.toggleProjectTask(task),
-                            title: Text(
-                              task.title,
-                              style: TextStyle(
-                                decoration: task.done
-                                    ? TextDecoration.lineThrough
-                                    : null,
-                              ),
-                            ),
-                            subtitle: task.deadline == null
-                                ? const Text('Nessuna scadenza')
-                                : Text(
-                                    '${_date(task.deadline!)} · ${_deadlineStatus(task.deadline!)}',
-                                  ),
-                            secondary: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  tooltip: 'Modifica',
-                                  icon: const Icon(Icons.edit_outlined),
-                                  onPressed: () async {
-                                    final result = await _projectTaskDialog(
-                                      context,
-                                      task: task,
-                                    );
-                                    if (result != null) {
-                                      widget.s.updateProjectTask(
-                                        task,
-                                        result.title,
-                                        result.deadline,
-                                      );
-                                    }
-                                  },
-                                ),
-                                IconButton(
-                                  tooltip: 'Elimina',
-                                  icon: const Icon(Icons.delete_outline),
-                                  onPressed: () async {
-                                    if (await _confirmDelete(
-                                      context,
-                                      task.title,
-                                    )) {
-                                      widget.s.removeProjectTask(project, task);
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
+                          (task) => _ProjectTaskTile(
+                            state: widget.s,
+                            project: project,
+                            task: task,
                           ),
                         )
                         .toList(),
@@ -4032,61 +4217,11 @@ class _ProjectFolderDetailPageState extends State<ProjectFolderDetailPage> {
                 : Column(
                     children: tasks
                         .map(
-                          (task) => CheckboxListTile(
-                            contentPadding: EdgeInsets.zero,
-                            value: task.done,
-                            onChanged: (_) => widget.s.toggleProjectTask(task),
-                            title: Text(
-                              task.title,
-                              style: TextStyle(
-                                decoration: task.done
-                                    ? TextDecoration.lineThrough
-                                    : null,
-                              ),
-                            ),
-                            subtitle: task.deadline == null
-                                ? const Text('Nessuna scadenza')
-                                : Text(
-                                    '${_date(task.deadline!)} · '
-                                    '${_deadlineStatus(task.deadline!)}',
-                                  ),
-                            secondary: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  tooltip: 'Modifica',
-                                  icon: const Icon(Icons.edit_outlined),
-                                  onPressed: () async {
-                                    final result = await _projectTaskDialog(
-                                      context,
-                                      task: task,
-                                    );
-                                    if (result != null) {
-                                      widget.s.updateProjectTask(
-                                        task,
-                                        result.title,
-                                        result.deadline,
-                                      );
-                                    }
-                                  },
-                                ),
-                                IconButton(
-                                  tooltip: 'Elimina',
-                                  icon: const Icon(Icons.delete_outline),
-                                  onPressed: () async {
-                                    if (await _confirmDelete(
-                                      context,
-                                      task.title,
-                                    )) {
-                                      widget.s.removeProjectTask(
-                                        widget.project,
-                                        task,
-                                      );
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
+                          (task) => _ProjectTaskTile(
+                            state: widget.s,
+                            project: widget.project,
+                            task: task,
+                            currentFolder: folder,
                           ),
                         )
                         .toList(),
