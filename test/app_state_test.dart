@@ -156,6 +156,42 @@ void main() {
     expect(folder.progress, 1);
   });
 
+  test('programma e sposta le azioni dei progetti senza duplicarle', () async {
+    final store = MemoryStore();
+    final state = AppState(store);
+    await state.init();
+
+    state.addProject('Casa');
+    final project = state.projects.single;
+    state.addProjectTask(project, 'Comprare una lampada', null);
+    final task = project.tasks.single;
+    final firstDate = DateTime(2026, 10, 4);
+    final secondDate = DateTime(2026, 10, 6);
+
+    state.scheduleProjectTask(task, firstDate);
+    state.scheduleProjectTask(task, secondDate);
+
+    expect(state.calendarItems, hasLength(1));
+    expect(state.calendarItems.single.projectTaskId, task.id);
+    expect(state.calendarItems.single.date, secondDate);
+    expect(task.deadline, secondDate);
+
+    state.toggleCalendarItem(state.calendarItems.single);
+    expect(task.done, isTrue);
+
+    final folder = state.addProjectFolder(project, 'Acquisti');
+    state.moveProjectTask(project, task, folder);
+    expect(project.tasks, isEmpty);
+    expect(folder.tasks, contains(task));
+
+    state.moveProjectTask(project, task, null);
+    expect(folder.tasks, isEmpty);
+    expect(project.tasks, contains(task));
+
+    state.removeCalendarItem(state.calendarItems.single);
+    expect(task.deadline, isNull);
+  });
+
   test('al cambio giorno recupera le incompiute e carica domani', () async {
     final store = MemoryStore()
       ..value = {

@@ -19,8 +19,12 @@ Scegli Chrome per il web, Windows per il desktop oppure un emulatore Android. Il
 - `lib/state`: stato e operazioni dell'app
 - `lib/app.dart`: navigazione responsive e pagine
 
-Le aree principali sono Oggi, Finanze, Obiettivi e Scadenze. Il menu **Altro**
-raccoglie Allenamento, Alimentazione, Studio, Cicli, Calendario e Impostazioni.
+Le aree principali sono Oggi, Finanze, Progetti e Scadenze. Il menu **Altro**
+raccoglie Allenamento, Alimentazione, Studio, Inbox, Calendario e Impostazioni.
+
+Gli obiettivi economici si trovano in Finanze. Nei Progetti ogni azione può
+essere programmata nel calendario oppure spostata in una cartella esistente o
+in una nuova cartella.
 
 La personalizzazione comprende tema chiaro/scuro, colore principale, sfondo
 scelto dal dispositivo e fino a quattro widget fotografici nella pagina Oggi.

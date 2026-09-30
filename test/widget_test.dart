@@ -19,7 +19,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Oggi'), findsWidgets);
     expect(find.text('Finanze'), findsOneWidget);
-    expect(find.text('Obiettivi'), findsWidgets);
+    expect(find.text('Progetti'), findsWidgets);
     expect(find.text('Scadenze'), findsOneWidget);
     expect(find.text('Altro'), findsOneWidget);
     expect(find.text('Modifica'), findsOneWidget);
@@ -37,11 +37,57 @@ void main() {
     expect(find.text('Allenamento'), findsOneWidget);
     expect(find.text('Alimentazione'), findsOneWidget);
     expect(find.text('Studio'), findsOneWidget);
-    expect(find.text('Cicli'), findsOneWidget);
+    expect(find.text('Inbox'), findsOneWidget);
     expect(find.text('Calendario'), findsOneWidget);
     expect(find.text('Routine'), findsOneWidget);
     expect(find.text('Check lists'), findsOneWidget);
     expect(find.text('Impostazioni'), findsOneWidget);
+  });
+
+  testWidgets('mostra gli obiettivi economici in Finanze', (tester) async {
+    await tester.pumpWidget(LifeHubApp(store: MemoryStore()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Finanze'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Obiettivi economici'), findsOneWidget);
+    expect(find.byTooltip('Nuovo obiettivo economico'), findsOneWidget);
+  });
+
+  testWidgets('mostra il menu delle azioni di progetto', (tester) async {
+    final store = MemoryStore()
+      ..value = {
+        'projects': [
+          {
+            'id': 'project-1',
+            'title': 'Casa',
+            'tasks': [
+              {'id': 'task-1', 'title': 'Comprare una lampada'},
+            ],
+            'folders': <Map<String, dynamic>>[],
+          },
+        ],
+      };
+    await tester.pumpWidget(LifeHubApp(store: store));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Progetti').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Casa'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byTooltip('Azioni'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -180));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Azioni'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Programma'), findsOneWidget);
+    expect(find.text('Sposta in'), findsOneWidget);
   });
 
   testWidgets('aggiunge nome e orario alle attività di oggi', (tester) async {

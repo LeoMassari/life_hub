@@ -546,20 +546,66 @@ class AppState extends ChangeNotifier {
     _changed();
   }
 
+  void scheduleProjectTask(ProjectTask task, DateTime date) {
+    task.deadline = date;
+    CalendarItem? scheduledItem;
+    for (final item in calendarItems) {
+      if (item.projectTaskId == task.id) {
+        scheduledItem = item;
+        break;
+      }
+    }
+    if (scheduledItem == null) {
+      calendarItems.add(
+        CalendarItem(
+          id: _id(),
+          title: task.title,
+          date: date,
+          done: task.done,
+          projectTaskId: task.id,
+        ),
+      );
+    } else {
+      scheduledItem.title = task.title;
+      scheduledItem.date = date;
+      scheduledItem.done = task.done;
+    }
+    _changed();
+  }
+
   void updateCalendarItem(CalendarItem item, String title, DateTime date) {
     item.title = title;
     item.date = date;
+    final task = _projectTaskById(item.projectTaskId);
+    if (task != null) {
+      task.title = title;
+      task.deadline = date;
+    }
     _changed();
   }
 
   void toggleCalendarItem(CalendarItem item) {
     item.done = !item.done;
+    final task = _projectTaskById(item.projectTaskId);
+    if (task != null) task.done = item.done;
     _changed();
   }
 
   void removeCalendarItem(CalendarItem item) {
     calendarItems.remove(item);
+    final task = _projectTaskById(item.projectTaskId);
+    if (task != null) task.deadline = null;
     _changed();
+  }
+
+  ProjectTask? _projectTaskById(String? id) {
+    if (id == null) return null;
+    for (final project in projects) {
+      for (final task in project.allTasks) {
+        if (task.id == id) return task;
+      }
+    }
+    return null;
   }
 
   void addProject(String title) {
@@ -573,6 +619,8 @@ class AppState extends ChangeNotifier {
   }
 
   void removeProject(ProjectItem project) {
+    final taskIds = project.allTasks.map((task) => task.id).toSet();
+    calendarItems.removeWhere((item) => taskIds.contains(item.projectTaskId));
     projects.remove(project);
     _changed();
   }
@@ -582,9 +630,11 @@ class AppState extends ChangeNotifier {
     _changed();
   }
 
-  void addProjectFolder(ProjectItem project, String title) {
-    project.folders.add(ProjectFolder(id: _id(), title: title));
+  ProjectFolder addProjectFolder(ProjectItem project, String title) {
+    final folder = ProjectFolder(id: _id(), title: title);
+    project.folders.add(folder);
     _changed();
+    return folder;
   }
 
   void updateProjectFolder(ProjectFolder folder, String title) {
@@ -593,6 +643,8 @@ class AppState extends ChangeNotifier {
   }
 
   void removeProjectFolder(ProjectItem project, ProjectFolder folder) {
+    final taskIds = folder.tasks.map((task) => task.id).toSet();
+    calendarItems.removeWhere((item) => taskIds.contains(item.projectTaskId));
     project.folders.remove(folder);
     _changed();
   }
@@ -609,11 +661,37 @@ class AppState extends ChangeNotifier {
   void updateProjectTask(ProjectTask task, String title, DateTime? deadline) {
     task.title = title;
     task.deadline = deadline;
+    for (final item in calendarItems) {
+      if (item.projectTaskId == task.id) {
+        item.title = title;
+        if (deadline != null) item.date = deadline;
+      }
+    }
     _changed();
   }
 
   void toggleProjectTask(ProjectTask task) {
     task.done = !task.done;
+    for (final item in calendarItems) {
+      if (item.projectTaskId == task.id) item.done = task.done;
+    }
+    _changed();
+  }
+
+  void moveProjectTask(
+    ProjectItem project,
+    ProjectTask task,
+    ProjectFolder? destination,
+  ) {
+    project.tasks.remove(task);
+    for (final folder in project.folders) {
+      folder.tasks.remove(task);
+    }
+    if (destination == null) {
+      project.tasks.add(task);
+    } else {
+      destination.tasks.add(task);
+    }
     _changed();
   }
 
@@ -622,6 +700,7 @@ class AppState extends ChangeNotifier {
     for (final folder in project.folders) {
       folder.tasks.remove(task);
     }
+    calendarItems.removeWhere((item) => item.projectTaskId == task.id);
     _changed();
   }
 
