@@ -224,6 +224,44 @@ void main() {
     );
   });
 
+  test('salva sottocartelle e ordine manuale delle attività', () async {
+    final store = MemoryStore();
+    final state = AppState(store);
+    await state.init();
+
+    state.addProject('Casa');
+    final project = state.projects.single;
+    final parent = state.addProjectFolder(project, 'Ristrutturazione');
+    final child = state.addProjectFolder(
+      project,
+      'Soggiorno',
+      emoji: '🛋️',
+      parent: parent,
+    );
+    state.addProjectFolderTask(child, 'Comprare la lampada', null, priority: 2);
+    state.addProjectFolderTask(child, 'Prendere le misure', null, priority: 1);
+
+    state.reorderProjectTasks(project, child, [
+      child.tasks.first,
+      child.tasks.last,
+    ]);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(parent.folders.single, same(child));
+    expect(child.tasks.map((task) => task.priority), [1, 2]);
+    expect(project.allTasks, hasLength(2));
+
+    final restored = AppState(store);
+    await restored.init();
+    final restoredParent = restored.projects.single.folders.single;
+    final restoredChild = restoredParent.folders.single;
+
+    expect(restoredChild.title, 'Soggiorno');
+    expect(restoredChild.emoji, '🛋️');
+    expect(restoredChild.tasks.first.title, 'Comprare la lampada');
+    expect(restoredChild.tasks.map((task) => task.priority), [1, 2]);
+  });
+
   test('al cambio giorno recupera le incompiute e carica domani', () async {
     final store = MemoryStore()
       ..value = {

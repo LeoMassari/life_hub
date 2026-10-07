@@ -178,6 +178,127 @@ void main() {
     expect(find.byTooltip('Sposta selezionate'), findsOneWidget);
   });
 
+  testWidgets('apre le sottocartelle dei progetti', (tester) async {
+    final store = MemoryStore()
+      ..value = {
+        'projects': [
+          {
+            'id': 'project-1',
+            'title': 'Casa',
+            'tasks': <Map<String, dynamic>>[],
+            'folders': [
+              {
+                'id': 'folder-1',
+                'title': 'Ristrutturazione',
+                'tasks': <Map<String, dynamic>>[],
+                'folders': [
+                  {
+                    'id': 'folder-2',
+                    'title': 'Soggiorno',
+                    'emoji': '🛋️',
+                    'tasks': <Map<String, dynamic>>[],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+    await tester.pumpWidget(LifeHubApp(store: store));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Progetti').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Casa'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ristrutturazione'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sottocartelle'), findsOneWidget);
+    expect(find.text('Soggiorno'), findsOneWidget);
+    expect(find.byTooltip('Aggiungi sottocartella'), findsOneWidget);
+  });
+
+  testWidgets('riordina le priorità con i pulsanti su e giù', (tester) async {
+    final store = MemoryStore()
+      ..value = {
+        'projects': [
+          {
+            'id': 'project-1',
+            'title': 'Casa',
+            'tasks': [
+              {'id': 'task-1', 'title': 'Prima attività', 'priority': 1},
+              {'id': 'task-2', 'title': 'Seconda attività', 'priority': 2},
+            ],
+            'folders': <Map<String, dynamic>>[],
+          },
+        ],
+      };
+    await tester.pumpWidget(LifeHubApp(store: store));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Progetti').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Casa'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Ordina priorità'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ordina per importanza'), findsOneWidget);
+    await tester.tap(find.byTooltip('Sposta in basso').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Salva ordine'));
+    await tester.pumpAndSettle();
+
+    final tasks = store.value?['projects']?[0]['tasks'] as List<dynamic>;
+    expect(tasks.first['title'], 'Seconda attività');
+    expect(tasks.first['priority'], 1);
+    expect(tasks.last['priority'], 2);
+  });
+
+  testWidgets('sposta le completate in fondo e permette di nasconderle', (
+    tester,
+  ) async {
+    final store = MemoryStore()
+      ..value = {
+        'projects': [
+          {
+            'id': 'project-1',
+            'title': 'Casa',
+            'tasks': [
+              {'id': 'task-1', 'title': 'Da fare', 'done': false},
+              {'id': 'task-2', 'title': 'Già fatta', 'done': true},
+            ],
+            'folders': <Map<String, dynamic>>[],
+          },
+        ],
+      };
+    await tester.pumpWidget(LifeHubApp(store: store));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Progetti').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Casa'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Attività completate'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Attività completate'), findsOneWidget);
+    expect(find.text('Già fatta'), findsOneWidget);
+    await tester.tap(find.text('Modifica'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Fatto'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Attività completate'), findsNothing);
+    expect(find.text('Già fatta'), findsNothing);
+  });
+
   testWidgets('aggiunge nome e orario alle attività di oggi', (tester) async {
     await tester.pumpWidget(LifeHubApp(store: MemoryStore()));
     await tester.pumpAndSettle();

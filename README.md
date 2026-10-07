@@ -27,7 +27,11 @@ essere programmata nel calendario, ordinata con una priorità numerica oppure
 spostata singolarmente o in gruppo. Le cartelle possono avere un'icona o emoji
 personale e mantengono lo sfondo scelto per la pagina Progetti. Il pulsante
 rapido sulle schede permette di scegliere cartella, scadenza e priorità prima
-di salvare una nuova attività.
+di salvare una nuova attività. Le priorità possono anche essere riordinate con
+le frecce su e giù, le cartelle possono contenere sottocartelle senza limiti di
+livello e le attività concluse vengono raccolte in fondo alla pagina. Il tasto
+**Modifica** nelle schede dei progetti permette di mostrare o nascondere la
+sezione delle completate senza eliminare i dati.
 
 La personalizzazione comprende tema chiaro/scuro, colore principale, sfondo
 scelto dal dispositivo e fino a quattro widget fotografici nella pagina Oggi.
