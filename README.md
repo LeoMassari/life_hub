@@ -23,8 +23,11 @@ Le aree principali sono Oggi, Finanze, Progetti e Scadenze. Il menu **Altro**
 raccoglie Allenamento, Alimentazione, Studio, Inbox, Calendario e Impostazioni.
 
 Gli obiettivi economici si trovano in Finanze. Nei Progetti ogni azione può
-essere programmata nel calendario oppure spostata in una cartella esistente o
-in una nuova cartella.
+essere programmata nel calendario, ordinata con una priorità numerica oppure
+spostata singolarmente o in gruppo. Le cartelle possono avere un'icona o emoji
+personale e mantengono lo sfondo scelto per la pagina Progetti. Il pulsante
+rapido sulle schede permette di scegliere cartella, scadenza e priorità prima
+di salvare una nuova attività.
 
 La personalizzazione comprende tema chiaro/scuro, colore principale, sfondo
 scelto dal dispositivo e fino a quattro widget fotografici nella pagina Oggi.

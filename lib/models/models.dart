@@ -243,18 +243,21 @@ class ProjectTask {
     required this.title,
     this.deadline,
     this.done = false,
+    this.priority,
   });
 
   final String id;
   String title;
   DateTime? deadline;
   bool done;
+  int? priority;
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,
     'deadline': deadline?.toIso8601String(),
     'done': done,
+    'priority': priority,
   };
 
   factory ProjectTask.fromJson(Map<String, dynamic> json) => ProjectTask(
@@ -264,6 +267,7 @@ class ProjectTask {
         ? null
         : DateTime.parse(json['deadline'] as String),
     done: json['done'] as bool? ?? false,
+    priority: (json['priority'] as num?)?.toInt(),
   );
 }
 
@@ -271,11 +275,13 @@ class ProjectFolder {
   ProjectFolder({
     required this.id,
     required this.title,
+    this.emoji,
     List<ProjectTask>? tasks,
   }) : tasks = tasks ?? [];
 
   final String id;
   String title;
+  String? emoji;
   final List<ProjectTask> tasks;
 
   double get progress => tasks.isEmpty
@@ -285,12 +291,14 @@ class ProjectFolder {
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,
+    'emoji': emoji,
     'tasks': tasks.map((task) => task.toJson()).toList(),
   };
 
   factory ProjectFolder.fromJson(Map<String, dynamic> json) => ProjectFolder(
     id: json['id'] as String,
     title: json['title'] as String,
+    emoji: json['emoji'] as String?,
     tasks: (json['tasks'] as List<dynamic>? ?? const [])
         .map(
           (task) =>

@@ -5,6 +5,16 @@ Ogni aggiornamento completato produce due archivi nella cartella `releases/`:
 - `life_hub-source-vX.Y.Z.zip`: progetto Flutter completo, senza cronologia Git o file temporanei;
 - `life_hub-web-vX.Y.Z.zip`: applicazione web compilata, pronta per essere pubblicata su un servizio di hosting.
 
+## 0.11.0
+
+- selezione multipla delle attività di un progetto o di una cartella e spostamento in blocco;
+- icona o emoji personalizzabile per ogni cartella di progetto;
+- sfondo della pagina Progetti mantenuto anche entrando nei progetti e nelle cartelle;
+- priorità numerica delle attività, con ordinamento automatico dal numero più basso;
+- pulsante rapido sulle schede dei progetti per aggiungere un'attività;
+- campi Dove, Scadenza e Priorità disponibili prima del salvataggio;
+- compatibilità completa con i progetti già salvati nel cloud o in locale.
+
 ## 0.10.0
 
 - la pagina Obiettivi diventa Progetti e mostra soltanto i progetti operativi;

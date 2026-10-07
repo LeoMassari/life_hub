@@ -90,6 +90,94 @@ void main() {
     expect(find.text('Sposta in'), findsOneWidget);
   });
 
+  testWidgets(
+    'aggiunge rapidamente un’attività scegliendo dove e la priorità',
+    (tester) async {
+      final store = MemoryStore()
+        ..value = {
+          'projects': [
+            {
+              'id': 'project-1',
+              'title': 'Casa',
+              'tasks': <Map<String, dynamic>>[],
+              'folders': [
+                {
+                  'id': 'folder-1',
+                  'title': 'Soggiorno',
+                  'emoji': '🛋️',
+                  'tasks': <Map<String, dynamic>>[],
+                },
+              ],
+            },
+          ],
+        };
+      await tester.pumpWidget(LifeHubApp(store: store));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Progetti').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Aggiungi attività'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Dove'), findsOneWidget);
+      expect(find.text('Priorità'), findsOneWidget);
+
+      await tester.enterText(
+        find.byType(TextField).first,
+        'Montare la lampada',
+      );
+      await tester.tap(find.text('Senza cartella'));
+      await tester.pumpAndSettle();
+      expect(find.text('Soggiorno'), findsOneWidget);
+      await tester.tap(find.text('Soggiorno').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Salva'));
+      await tester.pumpAndSettle();
+
+      expect(
+        store.value?['projects']?[0]['folders']?[0]['tasks']?[0]['title'],
+        'Montare la lampada',
+      );
+      expect(store.value?['projects']?[0]['folders']?[0]['emoji'], '🛋️');
+    },
+  );
+
+  testWidgets('seleziona più attività di un progetto per spostarle insieme', (
+    tester,
+  ) async {
+    final store = MemoryStore()
+      ..value = {
+        'projects': [
+          {
+            'id': 'project-1',
+            'title': 'Casa',
+            'tasks': [
+              {'id': 'task-1', 'title': 'Prima attività', 'priority': 1},
+              {'id': 'task-2', 'title': 'Seconda attività', 'priority': 2},
+            ],
+            'folders': <Map<String, dynamic>>[],
+          },
+        ],
+      };
+    await tester.pumpWidget(LifeHubApp(store: store));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Progetti').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Casa'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Seleziona più attività'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Prima attività'));
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -240));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Seconda attività'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 selezionate'), findsOneWidget);
+    expect(find.byTooltip('Sposta selezionate'), findsOneWidget);
+  });
+
   testWidgets('aggiunge nome e orario alle attività di oggi', (tester) async {
     await tester.pumpWidget(LifeHubApp(store: MemoryStore()));
     await tester.pumpAndSettle();

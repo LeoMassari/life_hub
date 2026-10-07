@@ -192,6 +192,38 @@ void main() {
     expect(task.deadline, isNull);
   });
 
+  test('salva priorità, emoji e sposta più attività insieme', () async {
+    final store = MemoryStore();
+    final state = AppState(store);
+    await state.init();
+
+    state.addProject('Casa');
+    final project = state.projects.single;
+    state.addProjectTask(project, 'Scegliere le luci', null, priority: 2);
+    state.addProjectTask(project, 'Misurare la stanza', null, priority: 1);
+    final folder = state.addProjectFolder(project, 'Soggiorno', emoji: '🛋️');
+
+    state.moveProjectTasks(
+      project,
+      List<ProjectTask>.of(project.tasks),
+      folder,
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(project.tasks, isEmpty);
+    expect(folder.tasks, hasLength(2));
+
+    final restored = AppState(store);
+    await restored.init();
+    final restoredFolder = restored.projects.single.folders.single;
+
+    expect(restoredFolder.emoji, '🛋️');
+    expect(
+      restoredFolder.tasks.map((task) => task.priority),
+      containsAll([1, 2]),
+    );
+  });
+
   test('al cambio giorno recupera le incompiute e carica domani', () async {
     final store = MemoryStore()
       ..value = {

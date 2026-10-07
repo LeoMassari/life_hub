@@ -91,6 +91,27 @@ MemoryImage? _memoryImage(String? imageBase64) {
   }
 }
 
+Widget _withPageBackground(
+  BuildContext context,
+  AppState state,
+  String pageId,
+  Widget child,
+) {
+  final background = _memoryImage(state.backgroundForPage(pageId));
+  if (background == null) return child;
+  return DecoratedBox(
+    decoration: BoxDecoration(
+      image: DecorationImage(image: background, fit: BoxFit.cover),
+    ),
+    child: ColoredBox(
+      color: Theme.of(
+        context,
+      ).scaffoldBackgroundColor.withValues(alpha: state.backgroundTransparency),
+      child: child,
+    ),
+  );
+}
+
 Future<String?> _pickImageBase64(
   BuildContext context, {
   int maxBytes = 2000000,
@@ -3531,6 +3552,135 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 }
 
+const _projectFolderEmojis = [
+  '📁',
+  '🏠',
+  '💼',
+  '💡',
+  '🛒',
+  '🎯',
+  '📚',
+  '✈️',
+  '💻',
+  '🛠️',
+  '💰',
+  '❤️',
+];
+
+Widget _projectFolderIcon(ProjectFolder folder, {double size = 22}) {
+  final emoji = folder.emoji;
+  return emoji == null || emoji.isEmpty
+      ? Icon(Icons.folder_outlined, size: size)
+      : Text(emoji, style: TextStyle(fontSize: size));
+}
+
+Future<({String title, String? emoji})?> _projectFolderDialog(
+  BuildContext context, {
+  ProjectFolder? folder,
+}) async {
+  final titleController = TextEditingController(text: folder?.title ?? '');
+  final emojiController = TextEditingController(text: folder?.emoji ?? '');
+  String? error;
+  final result = await showDialog<({String title, String? emoji})>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: Text(folder == null ? 'Nuova cartella' : 'Modifica cartella'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: titleController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Nome',
+                  hintText: 'Es. Preparazione, Acquisti, Documenti…',
+                  errorText: error,
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: emojiController,
+                maxLength: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Icona o emoji',
+                  hintText: 'Es. 🏠',
+                  helperText: 'Lascia vuoto per usare la cartella predefinita.',
+                ),
+                onChanged: (_) => setDialogState(() {}),
+              ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ChoiceChip(
+                    selected: emojiController.text.isEmpty,
+                    avatar: const Icon(Icons.folder_outlined, size: 18),
+                    label: const Text('Default'),
+                    onSelected: (_) {
+                      emojiController.clear();
+                      setDialogState(() {});
+                    },
+                  ),
+                  ..._projectFolderEmojis.map(
+                    (emoji) => ChoiceChip(
+                      selected: emojiController.text == emoji,
+                      label: Text(emoji),
+                      onSelected: (_) {
+                        emojiController.text = emoji;
+                        setDialogState(() {});
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final title = titleController.text.trim();
+              if (title.isEmpty) {
+                setDialogState(() => error = 'Inserisci un nome');
+                return;
+              }
+              final emoji = emojiController.text.trim();
+              Navigator.pop(context, (
+                title: title,
+                emoji: emoji.isEmpty ? null : emoji,
+              ));
+            },
+            child: const Text('Salva'),
+          ),
+        ],
+      ),
+    ),
+  );
+  titleController.dispose();
+  emojiController.dispose();
+  return result;
+}
+
+int _compareProjectTasks(ProjectTask a, ProjectTask b) {
+  if (a.done != b.done) return a.done ? 1 : -1;
+  final priorityComparison = (a.priority ?? 1 << 30).compareTo(
+    b.priority ?? 1 << 30,
+  );
+  if (priorityComparison != 0) return priorityComparison;
+  if (a.deadline == null && b.deadline != null) return 1;
+  if (a.deadline != null && b.deadline == null) return -1;
+  final deadlineComparison = a.deadline?.compareTo(b.deadline!) ?? 0;
+  if (deadlineComparison != 0) return deadlineComparison;
+  return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+}
+
 class _ProjectCard extends StatelessWidget {
   const _ProjectCard({required this.s, required this.project});
 
@@ -3567,6 +3717,19 @@ class _ProjectCard extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
+                  ),
+                  IconButton(
+                    tooltip: 'Aggiungi attività',
+                    icon: const Icon(Icons.add_task_outlined),
+                    onPressed: () async {
+                      final result = await _projectTaskDialog(
+                        context,
+                        project: project,
+                      );
+                      if (result != null) {
+                        _storeNewProjectTask(s, project, result);
+                      }
+                    },
                   ),
                   Text('${(project.progress * 100).round()}%'),
                   PopupMenuButton<String>(
@@ -3628,7 +3791,7 @@ class _ProjectFolderCard extends StatelessWidget {
       color: Theme.of(context).colorScheme.surfaceContainerLow,
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
-        leading: const Icon(Icons.folder_outlined),
+        leading: _projectFolderIcon(folder),
         title: Text(folder.title),
         subtitle: Text(
           '$completed di ${folder.tasks.length} attività · '
@@ -3644,13 +3807,16 @@ class _ProjectFolderCard extends StatelessWidget {
         trailing: PopupMenuButton<String>(
           onSelected: (value) async {
             if (value == 'edit') {
-              final title = await _textDialog(
+              final result = await _projectFolderDialog(
                 context,
-                'Rinomina cartella',
-                initialValue: folder.title,
+                folder: folder,
               );
-              if (title?.isNotEmpty == true) {
-                s.updateProjectFolder(folder, title!);
+              if (result != null) {
+                s.updateProjectFolder(
+                  folder,
+                  result.title,
+                  emoji: result.emoji,
+                );
               }
             } else if (value == 'delete' &&
                 await _confirmDelete(context, folder.title)) {
@@ -3667,57 +3833,160 @@ class _ProjectFolderCard extends StatelessWidget {
   }
 }
 
-Future<({String title, DateTime? deadline})?> _projectTaskDialog(
+typedef _ProjectTaskDraft = ({
+  String title,
+  DateTime? deadline,
+  ProjectFolder? folder,
+  int? priority,
+});
+
+int _nextProjectTaskPriority(List<ProjectTask> tasks) {
+  var highest = 0;
+  for (final task in tasks) {
+    highest = math.max(highest, task.priority ?? 0);
+  }
+  return math.max(highest + 1, tasks.length + 1);
+}
+
+void _storeNewProjectTask(
+  AppState state,
+  ProjectItem project,
+  _ProjectTaskDraft draft,
+) {
+  if (draft.folder == null) {
+    state.addProjectTask(
+      project,
+      draft.title,
+      draft.deadline,
+      priority: draft.priority,
+    );
+  } else {
+    state.addProjectFolderTask(
+      draft.folder!,
+      draft.title,
+      draft.deadline,
+      priority: draft.priority,
+    );
+  }
+}
+
+Future<_ProjectTaskDraft?> _projectTaskDialog(
   BuildContext context, {
+  required ProjectItem project,
+  ProjectFolder? currentFolder,
   ProjectTask? task,
 }) async {
   final controller = TextEditingController(text: task?.title ?? '');
+  const unassignedId = '__unassigned__';
+  var destinationId = currentFolder?.id ?? unassignedId;
+  final initialTasks = currentFolder?.tasks ?? project.tasks;
+  final priorityController = TextEditingController(
+    text: task == null
+        ? _nextProjectTaskPriority(initialTasks).toString()
+        : task.priority?.toString() ?? '',
+  );
   DateTime? deadline = task?.deadline;
   String? error;
-  final result = await showDialog<({String title, DateTime? deadline})>(
+  String? priorityError;
+  final result = await showDialog<_ProjectTaskDraft>(
     context: context,
     builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) => AlertDialog(
-        title: Text(
-          task == null ? 'Nuova sotto-attività' : 'Modifica attività',
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: controller,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: 'Titolo',
-                errorText: error,
-              ),
-            ),
-            const SizedBox(height: 14),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.event_outlined),
-              title: Text(
-                deadline == null ? 'Nessuna scadenza' : _date(deadline!),
-              ),
-              trailing: deadline == null
-                  ? null
-                  : IconButton(
-                      tooltip: 'Rimuovi scadenza',
-                      icon: const Icon(Icons.close),
-                      onPressed: () => setDialogState(() => deadline = null),
+        title: Text(task == null ? 'Nuova attività' : 'Modifica attività'),
+        content: SingleChildScrollView(
+          child: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: 'Titolo',
+                    errorText: error,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.event_outlined),
+                  title: Text(
+                    deadline == null ? 'Nessuna scadenza' : _date(deadline!),
+                  ),
+                  trailing: deadline == null
+                      ? null
+                      : IconButton(
+                          tooltip: 'Rimuovi scadenza',
+                          icon: const Icon(Icons.close),
+                          onPressed: () =>
+                              setDialogState(() => deadline = null),
+                        ),
+                  onTap: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now().add(const Duration(days: 3650)),
+                      initialDate: deadline ?? DateTime.now(),
+                    );
+                    if (date != null) setDialogState(() => deadline = date);
+                  },
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: destinationId,
+                  decoration: const InputDecoration(
+                    labelText: 'Dove',
+                    prefixIcon: Icon(Icons.drive_file_move_outline),
+                  ),
+                  items: [
+                    const DropdownMenuItem(
+                      value: unassignedId,
+                      child: Text('Senza cartella'),
                     ),
-              onTap: () async {
-                final date = await showDatePicker(
-                  context: context,
-                  firstDate: DateTime(2020),
-                  lastDate: DateTime.now().add(const Duration(days: 3650)),
-                  initialDate: deadline ?? DateTime.now(),
-                );
-                if (date != null) setDialogState(() => deadline = date);
-              },
+                    ...project.folders.map(
+                      (folder) => DropdownMenuItem(
+                        value: folder.id,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _projectFolderIcon(folder, size: 19),
+                            const SizedBox(width: 9),
+                            Text(folder.title, overflow: TextOverflow.ellipsis),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    destinationId = value;
+                    if (task == null) {
+                      final destination = project.folders
+                          .where((folder) => folder.id == value)
+                          .firstOrNull;
+                      priorityController.text = _nextProjectTaskPriority(
+                        destination?.tasks ?? project.tasks,
+                      ).toString();
+                    }
+                    setDialogState(() {});
+                  },
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: priorityController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Priorità',
+                    prefixIcon: Icon(Icons.format_list_numbered),
+                    helperText:
+                        '1 è la priorità più alta. Puoi lasciarla vuota.',
+                  ).copyWith(errorText: priorityError),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
         actions: [
           TextButton(
@@ -3727,11 +3996,34 @@ Future<({String title, DateTime? deadline})?> _projectTaskDialog(
           FilledButton(
             onPressed: () {
               final title = controller.text.trim();
+              final priorityText = priorityController.text.trim();
+              final priority = priorityText.isEmpty
+                  ? null
+                  : int.tryParse(priorityText);
               if (title.isEmpty) {
                 setDialogState(() => error = 'Inserisci un titolo');
                 return;
               }
-              Navigator.pop(context, (title: title, deadline: deadline));
+              if (priorityText.isNotEmpty &&
+                  (priority == null || priority < 1)) {
+                setDialogState(
+                  () => priorityError = 'La priorità deve essere almeno 1',
+                );
+                return;
+              }
+              ProjectFolder? destination;
+              for (final folder in project.folders) {
+                if (folder.id == destinationId) {
+                  destination = folder;
+                  break;
+                }
+              }
+              Navigator.pop(context, (
+                title: title,
+                deadline: deadline,
+                folder: destination,
+                priority: priority,
+              ));
             },
             child: const Text('Salva'),
           ),
@@ -3739,7 +4031,12 @@ Future<({String title, DateTime? deadline})?> _projectTaskDialog(
       ),
     ),
   );
-  controller.dispose();
+  // La Future del dialogo termina all'inizio dell'animazione di chiusura:
+  // attendiamo che i campi siano usciti dall'albero prima di liberarli.
+  Future<void>.delayed(const Duration(milliseconds: 350), () {
+    controller.dispose();
+    priorityController.dispose();
+  });
   return result;
 }
 
@@ -3776,13 +4073,14 @@ Future<void> _scheduleProjectTask(
   );
 }
 
-Future<void> _moveProjectTask(
+Future<bool> _moveProjectTasks(
   BuildContext context,
   AppState state,
   ProjectItem project,
-  ProjectTask task, {
+  List<ProjectTask> tasks, {
   ProjectFolder? currentFolder,
 }) async {
+  if (tasks.isEmpty) return false;
   final destination = await showModalBottomSheet<Object>(
     context: context,
     showDragHandle: true,
@@ -3797,7 +4095,9 @@ Future<void> _moveProjectTask(
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
               child: Text(
-                'Sposta “${task.title}”',
+                tasks.length == 1
+                    ? 'Sposta “${tasks.single.title}”'
+                    : 'Sposta ${tasks.length} attività',
                 style: Theme.of(
                   context,
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
@@ -3812,7 +4112,7 @@ Future<void> _moveProjectTask(
             ),
             ...project.folders.map(
               (folder) => ListTile(
-                leading: const Icon(Icons.folder_outlined),
+                leading: _projectFolderIcon(folder),
                 title: Text(folder.title),
                 trailing: identical(folder, currentFolder)
                     ? const Icon(Icons.check)
@@ -3832,32 +4132,33 @@ Future<void> _moveProjectTask(
       ),
     ),
   );
-  if (destination == null || !context.mounted) return;
+  if (destination == null || !context.mounted) return false;
 
   ProjectFolder? targetFolder;
   if (destination is ProjectFolder) {
     targetFolder = destination;
   } else if (destination == _ProjectTaskDestination.newFolder) {
-    final title = await _textDialog(
-      context,
-      'Nuova cartella',
-      hint: 'Es. Preparazione, Acquisti, Documenti…',
+    final folderDraft = await _projectFolderDialog(context);
+    if (folderDraft == null) return false;
+    targetFolder = state.addProjectFolder(
+      project,
+      folderDraft.title,
+      emoji: folderDraft.emoji,
     );
-    if (title?.isNotEmpty != true) return;
-    targetFolder = state.addProjectFolder(project, title!);
   }
 
-  state.moveProjectTask(project, task, targetFolder);
-  if (!context.mounted) return;
+  state.moveProjectTasks(project, tasks, targetFolder);
+  if (!context.mounted) return true;
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
       content: Text(
         targetFolder == null
-            ? 'Azione spostata tra quelle senza cartella.'
-            : 'Azione spostata in “${targetFolder.title}”.',
+            ? '${tasks.length == 1 ? 'Azione spostata' : '${tasks.length} azioni spostate'} tra quelle senza cartella.'
+            : '${tasks.length == 1 ? 'Azione spostata' : '${tasks.length} azioni spostate'} in “${targetFolder.title}”.',
       ),
     ),
   );
+  return true;
 }
 
 class _ProjectTaskTile extends StatelessWidget {
@@ -3866,17 +4167,37 @@ class _ProjectTaskTile extends StatelessWidget {
     required this.project,
     required this.task,
     this.currentFolder,
+    this.selectionMode = false,
+    this.selected = false,
+    this.onSelectionChanged,
   });
 
   final AppState state;
   final ProjectItem project;
   final ProjectTask task;
   final ProjectFolder? currentFolder;
+  final bool selectionMode;
+  final bool selected;
+  final ValueChanged<bool>? onSelectionChanged;
 
   @override
   Widget build(BuildContext context) => ListTile(
     contentPadding: EdgeInsets.zero,
-    onTap: () => state.toggleProjectTask(task),
+    leading: task.priority == null
+        ? null
+        : Tooltip(
+            message: 'Priorità ${task.priority}',
+            child: CircleAvatar(
+              radius: 16,
+              child: Text(
+                '${task.priority}',
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
+            ),
+          ),
+    onTap: selectionMode
+        ? () => onSelectionChanged?.call(!selected)
+        : () => state.toggleProjectTask(task),
     title: Text(
       task.title,
       style: TextStyle(
@@ -3886,89 +4207,103 @@ class _ProjectTaskTile extends StatelessWidget {
     subtitle: task.deadline == null
         ? const Text('Non programmata')
         : Text('${_date(task.deadline!)} · ${_deadlineStatus(task.deadline!)}'),
-    trailing: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Checkbox(
-          value: task.done,
-          onChanged: (_) => state.toggleProjectTask(task),
-        ),
-        PopupMenuButton<_ProjectTaskAction>(
-          tooltip: 'Azioni',
-          icon: const Icon(Icons.more_vert),
-          onSelected: (action) async {
-            switch (action) {
-              case _ProjectTaskAction.schedule:
-                await _scheduleProjectTask(context, state, task);
-                break;
-              case _ProjectTaskAction.move:
-                await _moveProjectTask(
-                  context,
-                  state,
-                  project,
-                  task,
-                  currentFolder: currentFolder,
-                );
-                break;
-              case _ProjectTaskAction.edit:
-                final result = await _projectTaskDialog(context, task: task);
-                if (result != null) {
-                  state.updateProjectTask(task, result.title, result.deadline);
-                }
-                break;
-              case _ProjectTaskAction.delete:
-                if (await _confirmDelete(context, task.title)) {
-                  state.removeProjectTask(project, task);
-                }
-                break;
-            }
-          },
-          itemBuilder: (context) => const [
-            PopupMenuItem(
-              value: _ProjectTaskAction.schedule,
-              child: Row(
-                children: [
-                  Icon(Icons.event_available_outlined),
-                  SizedBox(width: 12),
-                  Text('Programma'),
+    trailing: selectionMode
+        ? Checkbox(
+            value: selected,
+            onChanged: (value) => onSelectionChanged?.call(value ?? false),
+          )
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Checkbox(
+                value: task.done,
+                onChanged: (_) => state.toggleProjectTask(task),
+              ),
+              PopupMenuButton<_ProjectTaskAction>(
+                tooltip: 'Azioni',
+                icon: const Icon(Icons.more_vert),
+                onSelected: (action) async {
+                  switch (action) {
+                    case _ProjectTaskAction.schedule:
+                      await _scheduleProjectTask(context, state, task);
+                      break;
+                    case _ProjectTaskAction.move:
+                      await _moveProjectTasks(context, state, project, [
+                        task,
+                      ], currentFolder: currentFolder);
+                      break;
+                    case _ProjectTaskAction.edit:
+                      final result = await _projectTaskDialog(
+                        context,
+                        project: project,
+                        currentFolder: currentFolder,
+                        task: task,
+                      );
+                      if (result != null) {
+                        state.updateProjectTask(
+                          task,
+                          result.title,
+                          result.deadline,
+                          priority: result.priority,
+                        );
+                        if (!identical(result.folder, currentFolder)) {
+                          state.moveProjectTask(project, task, result.folder);
+                        }
+                      }
+                      break;
+                    case _ProjectTaskAction.delete:
+                      if (await _confirmDelete(context, task.title)) {
+                        state.removeProjectTask(project, task);
+                      }
+                      break;
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: _ProjectTaskAction.schedule,
+                    child: Row(
+                      children: [
+                        Icon(Icons.event_available_outlined),
+                        SizedBox(width: 12),
+                        Text('Programma'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _ProjectTaskAction.move,
+                    child: Row(
+                      children: [
+                        Icon(Icons.drive_file_move_outline),
+                        SizedBox(width: 12),
+                        Text('Sposta in'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuDivider(),
+                  PopupMenuItem(
+                    value: _ProjectTaskAction.edit,
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined),
+                        SizedBox(width: 12),
+                        Text('Modifica'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _ProjectTaskAction.delete,
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline),
+                        SizedBox(width: 12),
+                        Text('Elimina'),
+                      ],
+                    ),
+                  ),
                 ],
               ),
-            ),
-            PopupMenuItem(
-              value: _ProjectTaskAction.move,
-              child: Row(
-                children: [
-                  Icon(Icons.drive_file_move_outline),
-                  SizedBox(width: 12),
-                  Text('Sposta in'),
-                ],
-              ),
-            ),
-            PopupMenuDivider(),
-            PopupMenuItem(
-              value: _ProjectTaskAction.edit,
-              child: Row(
-                children: [
-                  Icon(Icons.edit_outlined),
-                  SizedBox(width: 12),
-                  Text('Modifica'),
-                ],
-              ),
-            ),
-            PopupMenuItem(
-              value: _ProjectTaskAction.delete,
-              child: Row(
-                children: [
-                  Icon(Icons.delete_outline),
-                  SizedBox(width: 12),
-                  Text('Elimina'),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ],
-    ),
+            ],
+          ),
   );
 }
 
@@ -3983,6 +4318,9 @@ class ProjectDetailPage extends StatefulWidget {
 }
 
 class _ProjectDetailPageState extends State<ProjectDetailPage> {
+  bool _selectionMode = false;
+  final Set<String> _selectedTaskIds = {};
+
   @override
   void initState() {
     super.initState();
@@ -3990,7 +4328,11 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
   }
 
   void _refresh() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    _selectedTaskIds.removeWhere(
+      (id) => !widget.project.tasks.any((task) => task.id == id),
+    );
+    setState(() {});
   }
 
   @override
@@ -4000,110 +4342,171 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
   }
 
   Future<void> _addTask() async {
-    final result = await _projectTaskDialog(context);
+    final result = await _projectTaskDialog(context, project: widget.project);
     if (result != null) {
-      widget.s.addProjectTask(widget.project, result.title, result.deadline);
+      _storeNewProjectTask(widget.s, widget.project, result);
     }
   }
 
   Future<void> _addFolder() async {
-    final title = await _textDialog(
-      context,
-      'Nuova cartella',
-      hint: 'Es. Preparazione, Acquisti, Documenti…',
-    );
-    if (title?.isNotEmpty == true) {
-      widget.s.addProjectFolder(widget.project, title!);
+    final result = await _projectFolderDialog(context);
+    if (result != null) {
+      widget.s.addProjectFolder(
+        widget.project,
+        result.title,
+        emoji: result.emoji,
+      );
     }
+  }
+
+  void _setSelectionMode(bool value) {
+    setState(() {
+      _selectionMode = value;
+      if (!value) _selectedTaskIds.clear();
+    });
+  }
+
+  Future<void> _moveSelected(List<ProjectTask> tasks) async {
+    final selected = tasks
+        .where((task) => _selectedTaskIds.contains(task.id))
+        .toList();
+    final moved = await _moveProjectTasks(
+      context,
+      widget.s,
+      widget.project,
+      selected,
+    );
+    if (moved && mounted) _setSelectionMode(false);
   }
 
   @override
   Widget build(BuildContext context) {
     final project = widget.project;
     final completed = project.allTasks.where((task) => task.done).length;
-    final tasks = [...project.tasks]
-      ..sort((a, b) {
-        if (a.done != b.done) return a.done ? 1 : -1;
-        if (a.deadline == null && b.deadline == null) return 0;
-        if (a.deadline == null) return 1;
-        if (b.deadline == null) return -1;
-        return a.deadline!.compareTo(b.deadline!);
-      });
+    final tasks = [...project.tasks]..sort(_compareProjectTasks);
+    final selectedCount = tasks
+        .where((task) => _selectedTaskIds.contains(task.id))
+        .length;
     return Scaffold(
-      appBar: AppBar(title: Text(project.title)),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _addTask,
-        icon: const Icon(Icons.add),
-        label: const Text('Attività'),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Section(
-            title: '${(project.progress * 100).round()}% completato',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                LinearProgressIndicator(
-                  value: project.progress,
-                  minHeight: 12,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                const SizedBox(height: 10),
-                Text('$completed di ${project.allTasks.length} sotto-attività'),
-              ],
+      appBar: AppBar(
+        leading: _selectionMode
+            ? IconButton(
+                tooltip: 'Chiudi selezione',
+                icon: const Icon(Icons.close),
+                onPressed: () => _setSelectionMode(false),
+              )
+            : null,
+        title: Text(
+          _selectionMode ? '$selectedCount selezionate' : project.title,
+        ),
+        actions: [
+          if (_selectionMode)
+            IconButton(
+              tooltip: 'Sposta selezionate',
+              icon: const Icon(Icons.drive_file_move_outline),
+              onPressed: selectedCount == 0 ? null : () => _moveSelected(tasks),
+            )
+          else
+            IconButton(
+              tooltip: 'Seleziona più attività',
+              icon: const Icon(Icons.library_add_check_outlined),
+              onPressed: tasks.isEmpty ? null : () => _setSelectionMode(true),
             ),
-          ),
-          Section(
-            title: 'Cartelle',
-            action: IconButton(
-              tooltip: 'Aggiungi cartella',
-              icon: const Icon(Icons.create_new_folder_outlined),
-              onPressed: _addFolder,
-            ),
-            child: project.folders.isEmpty
-                ? const _EmptyState(
-                    icon: Icons.folder_open_outlined,
-                    message: 'Crea cartelle per raggruppare le attività.',
-                  )
-                : Column(
-                    children: project.folders
-                        .map(
-                          (folder) => _ProjectFolderCard(
-                            s: widget.s,
-                            project: project,
-                            folder: folder,
-                          ),
-                        )
-                        .toList(),
-                  ),
-          ),
-          Section(
-            title: 'Attività senza cartella',
-            action: IconButton(
-              tooltip: 'Aggiungi',
-              icon: const Icon(Icons.add),
-              onPressed: _addTask,
-            ),
-            child: tasks.isEmpty
-                ? const _EmptyState(
-                    icon: Icons.checklist,
-                    message: 'Le attività non assegnate appariranno qui.',
-                  )
-                : Column(
-                    children: tasks
-                        .map(
-                          (task) => _ProjectTaskTile(
-                            state: widget.s,
-                            project: project,
-                            task: task,
-                          ),
-                        )
-                        .toList(),
-                  ),
-          ),
-          const SizedBox(height: 80),
         ],
+      ),
+      floatingActionButton: _selectionMode
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: _addTask,
+              icon: const Icon(Icons.add),
+              label: const Text('Attività'),
+            ),
+      body: _withPageBackground(
+        context,
+        widget.s,
+        'goals',
+        ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            Section(
+              title: '${(project.progress * 100).round()}% completato',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LinearProgressIndicator(
+                    value: project.progress,
+                    minHeight: 12,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '$completed di ${project.allTasks.length} sotto-attività',
+                  ),
+                ],
+              ),
+            ),
+            Section(
+              title: 'Cartelle',
+              action: IconButton(
+                tooltip: 'Aggiungi cartella',
+                icon: const Icon(Icons.create_new_folder_outlined),
+                onPressed: _addFolder,
+              ),
+              child: project.folders.isEmpty
+                  ? const _EmptyState(
+                      icon: Icons.folder_open_outlined,
+                      message: 'Crea cartelle per raggruppare le attività.',
+                    )
+                  : Column(
+                      children: project.folders
+                          .map(
+                            (folder) => _ProjectFolderCard(
+                              s: widget.s,
+                              project: project,
+                              folder: folder,
+                            ),
+                          )
+                          .toList(),
+                    ),
+            ),
+            Section(
+              title: 'Attività senza cartella',
+              action: IconButton(
+                tooltip: 'Aggiungi',
+                icon: const Icon(Icons.add),
+                onPressed: _addTask,
+              ),
+              child: tasks.isEmpty
+                  ? const _EmptyState(
+                      icon: Icons.checklist,
+                      message: 'Le attività non assegnate appariranno qui.',
+                    )
+                  : Column(
+                      children: tasks
+                          .map(
+                            (task) => _ProjectTaskTile(
+                              state: widget.s,
+                              project: project,
+                              task: task,
+                              selectionMode: _selectionMode,
+                              selected: _selectedTaskIds.contains(task.id),
+                              onSelectionChanged: (selected) {
+                                setState(() {
+                                  if (selected) {
+                                    _selectedTaskIds.add(task.id);
+                                  } else {
+                                    _selectedTaskIds.remove(task.id);
+                                  }
+                                });
+                              },
+                            ),
+                          )
+                          .toList(),
+                    ),
+            ),
+            const SizedBox(height: 80),
+          ],
+        ),
       ),
     );
   }
@@ -4127,6 +4530,9 @@ class ProjectFolderDetailPage extends StatefulWidget {
 }
 
 class _ProjectFolderDetailPageState extends State<ProjectFolderDetailPage> {
+  bool _selectionMode = false;
+  final Set<String> _selectedTaskIds = {};
+
   @override
   void initState() {
     super.initState();
@@ -4134,7 +4540,11 @@ class _ProjectFolderDetailPageState extends State<ProjectFolderDetailPage> {
   }
 
   void _refresh() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    _selectedTaskIds.removeWhere(
+      (id) => !widget.folder.tasks.any((task) => task.id == id),
+    );
+    setState(() {});
   }
 
   @override
@@ -4144,91 +4554,153 @@ class _ProjectFolderDetailPageState extends State<ProjectFolderDetailPage> {
   }
 
   Future<void> _addTask() async {
-    final result = await _projectTaskDialog(context);
+    final result = await _projectTaskDialog(
+      context,
+      project: widget.project,
+      currentFolder: widget.folder,
+    );
     if (result != null) {
-      widget.s.addProjectFolderTask(
-        widget.folder,
-        result.title,
-        result.deadline,
-      );
+      _storeNewProjectTask(widget.s, widget.project, result);
     }
+  }
+
+  void _setSelectionMode(bool value) {
+    setState(() {
+      _selectionMode = value;
+      if (!value) _selectedTaskIds.clear();
+    });
+  }
+
+  Future<void> _moveSelected(List<ProjectTask> tasks) async {
+    final selected = tasks
+        .where((task) => _selectedTaskIds.contains(task.id))
+        .toList();
+    final moved = await _moveProjectTasks(
+      context,
+      widget.s,
+      widget.project,
+      selected,
+      currentFolder: widget.folder,
+    );
+    if (moved && mounted) _setSelectionMode(false);
   }
 
   @override
   Widget build(BuildContext context) {
     final folder = widget.folder;
     final completed = folder.tasks.where((task) => task.done).length;
-    final tasks = [...folder.tasks]
-      ..sort((a, b) {
-        if (a.done != b.done) return a.done ? 1 : -1;
-        if (a.deadline == null && b.deadline == null) return 0;
-        if (a.deadline == null) return 1;
-        if (b.deadline == null) return -1;
-        return a.deadline!.compareTo(b.deadline!);
-      });
+    final tasks = [...folder.tasks]..sort(_compareProjectTasks);
+    final selectedCount = tasks
+        .where((task) => _selectedTaskIds.contains(task.id))
+        .length;
     return Scaffold(
       appBar: AppBar(
+        leading: _selectionMode
+            ? IconButton(
+                tooltip: 'Chiudi selezione',
+                icon: const Icon(Icons.close),
+                onPressed: () => _setSelectionMode(false),
+              )
+            : null,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(folder.title),
+            Text(
+              _selectionMode
+                  ? '$selectedCount selezionate'
+                  : folder.emoji == null
+                  ? folder.title
+                  : '${folder.emoji} ${folder.title}',
+            ),
             Text(
               widget.project.title,
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _addTask,
-        icon: const Icon(Icons.add),
-        label: const Text('Attività'),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Section(
-            title: '${(folder.progress * 100).round()}% completato',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                LinearProgressIndicator(
-                  value: folder.progress,
-                  minHeight: 12,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                const SizedBox(height: 10),
-                Text('$completed di ${folder.tasks.length} attività'),
-              ],
+        actions: [
+          if (_selectionMode)
+            IconButton(
+              tooltip: 'Sposta selezionate',
+              icon: const Icon(Icons.drive_file_move_outline),
+              onPressed: selectedCount == 0 ? null : () => _moveSelected(tasks),
+            )
+          else
+            IconButton(
+              tooltip: 'Seleziona più attività',
+              icon: const Icon(Icons.library_add_check_outlined),
+              onPressed: tasks.isEmpty ? null : () => _setSelectionMode(true),
             ),
-          ),
-          Section(
-            title: 'Attività',
-            action: IconButton(
-              tooltip: 'Aggiungi attività',
-              icon: const Icon(Icons.add),
-              onPressed: _addTask,
-            ),
-            child: tasks.isEmpty
-                ? const _EmptyState(
-                    icon: Icons.checklist,
-                    message: 'Aggiungi la prima attività della cartella.',
-                  )
-                : Column(
-                    children: tasks
-                        .map(
-                          (task) => _ProjectTaskTile(
-                            state: widget.s,
-                            project: widget.project,
-                            task: task,
-                            currentFolder: folder,
-                          ),
-                        )
-                        .toList(),
-                  ),
-          ),
-          const SizedBox(height: 80),
         ],
+      ),
+      floatingActionButton: _selectionMode
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: _addTask,
+              icon: const Icon(Icons.add),
+              label: const Text('Attività'),
+            ),
+      body: _withPageBackground(
+        context,
+        widget.s,
+        'goals',
+        ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            Section(
+              title: '${(folder.progress * 100).round()}% completato',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LinearProgressIndicator(
+                    value: folder.progress,
+                    minHeight: 12,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  const SizedBox(height: 10),
+                  Text('$completed di ${folder.tasks.length} attività'),
+                ],
+              ),
+            ),
+            Section(
+              title: 'Attività',
+              action: IconButton(
+                tooltip: 'Aggiungi attività',
+                icon: const Icon(Icons.add),
+                onPressed: _addTask,
+              ),
+              child: tasks.isEmpty
+                  ? const _EmptyState(
+                      icon: Icons.checklist,
+                      message: 'Aggiungi la prima attività della cartella.',
+                    )
+                  : Column(
+                      children: tasks
+                          .map(
+                            (task) => _ProjectTaskTile(
+                              state: widget.s,
+                              project: widget.project,
+                              task: task,
+                              currentFolder: folder,
+                              selectionMode: _selectionMode,
+                              selected: _selectedTaskIds.contains(task.id),
+                              onSelectionChanged: (selected) {
+                                setState(() {
+                                  if (selected) {
+                                    _selectedTaskIds.add(task.id);
+                                  } else {
+                                    _selectedTaskIds.remove(task.id);
+                                  }
+                                });
+                              },
+                            ),
+                          )
+                          .toList(),
+                    ),
+            ),
+            const SizedBox(height: 80),
+          ],
+        ),
       ),
     );
   }

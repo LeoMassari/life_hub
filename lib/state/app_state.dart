@@ -625,20 +625,41 @@ class AppState extends ChangeNotifier {
     _changed();
   }
 
-  void addProjectTask(ProjectItem project, String title, DateTime? deadline) {
-    project.tasks.add(ProjectTask(id: _id(), title: title, deadline: deadline));
+  void addProjectTask(
+    ProjectItem project,
+    String title,
+    DateTime? deadline, {
+    int? priority,
+  }) {
+    project.tasks.add(
+      ProjectTask(
+        id: _id(),
+        title: title,
+        deadline: deadline,
+        priority: priority,
+      ),
+    );
     _changed();
   }
 
-  ProjectFolder addProjectFolder(ProjectItem project, String title) {
-    final folder = ProjectFolder(id: _id(), title: title);
+  ProjectFolder addProjectFolder(
+    ProjectItem project,
+    String title, {
+    String? emoji,
+  }) {
+    final folder = ProjectFolder(id: _id(), title: title, emoji: emoji);
     project.folders.add(folder);
     _changed();
     return folder;
   }
 
-  void updateProjectFolder(ProjectFolder folder, String title) {
+  void updateProjectFolder(
+    ProjectFolder folder,
+    String title, {
+    String? emoji,
+  }) {
     folder.title = title;
+    folder.emoji = emoji;
     _changed();
   }
 
@@ -652,15 +673,29 @@ class AppState extends ChangeNotifier {
   void addProjectFolderTask(
     ProjectFolder folder,
     String title,
-    DateTime? deadline,
-  ) {
-    folder.tasks.add(ProjectTask(id: _id(), title: title, deadline: deadline));
+    DateTime? deadline, {
+    int? priority,
+  }) {
+    folder.tasks.add(
+      ProjectTask(
+        id: _id(),
+        title: title,
+        deadline: deadline,
+        priority: priority,
+      ),
+    );
     _changed();
   }
 
-  void updateProjectTask(ProjectTask task, String title, DateTime? deadline) {
+  void updateProjectTask(
+    ProjectTask task,
+    String title,
+    DateTime? deadline, {
+    int? priority,
+  }) {
     task.title = title;
     task.deadline = deadline;
+    task.priority = priority;
     for (final item in calendarItems) {
       if (item.projectTaskId == task.id) {
         item.title = title;
@@ -683,15 +718,22 @@ class AppState extends ChangeNotifier {
     ProjectTask task,
     ProjectFolder? destination,
   ) {
-    project.tasks.remove(task);
+    moveProjectTasks(project, [task], destination);
+  }
+
+  void moveProjectTasks(
+    ProjectItem project,
+    Iterable<ProjectTask> tasks,
+    ProjectFolder? destination,
+  ) {
+    final moving = tasks.toList();
+    if (moving.isEmpty) return;
+    project.tasks.removeWhere(moving.contains);
     for (final folder in project.folders) {
-      folder.tasks.remove(task);
+      folder.tasks.removeWhere(moving.contains);
     }
-    if (destination == null) {
-      project.tasks.add(task);
-    } else {
-      destination.tasks.add(task);
-    }
+    final target = destination?.tasks ?? project.tasks;
+    target.addAll(moving);
     _changed();
   }
 
