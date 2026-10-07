@@ -646,9 +646,10 @@ class AppState extends ChangeNotifier {
     ProjectItem project,
     String title, {
     String? emoji,
+    ProjectFolder? parent,
   }) {
     final folder = ProjectFolder(id: _id(), title: title, emoji: emoji);
-    project.folders.add(folder);
+    (parent?.folders ?? project.folders).add(folder);
     _changed();
     return folder;
   }
@@ -664,9 +665,17 @@ class AppState extends ChangeNotifier {
   }
 
   void removeProjectFolder(ProjectItem project, ProjectFolder folder) {
-    final taskIds = folder.tasks.map((task) => task.id).toSet();
+    final taskIds = folder.allTasks.map((task) => task.id).toSet();
     calendarItems.removeWhere((item) => taskIds.contains(item.projectTaskId));
-    project.folders.remove(folder);
+    bool removeFrom(List<ProjectFolder> folders) {
+      if (folders.remove(folder)) return true;
+      for (final parent in folders) {
+        if (removeFrom(parent.folders)) return true;
+      }
+      return false;
+    }
+
+    removeFrom(project.folders);
     _changed();
   }
 
@@ -729,7 +738,7 @@ class AppState extends ChangeNotifier {
     final moving = tasks.toList();
     if (moving.isEmpty) return;
     project.tasks.removeWhere(moving.contains);
-    for (final folder in project.folders) {
+    for (final folder in project.allFolders) {
       folder.tasks.removeWhere(moving.contains);
     }
     final target = destination?.tasks ?? project.tasks;
@@ -737,9 +746,31 @@ class AppState extends ChangeNotifier {
     _changed();
   }
 
+  void reorderProjectTasks(
+    ProjectItem project,
+    ProjectFolder? folder,
+    List<ProjectTask> orderedTasks,
+  ) {
+    final target = folder?.tasks ?? project.tasks;
+    final activeTasks = target.where((task) => !task.done).toList();
+    if (orderedTasks.length != activeTasks.length ||
+        !activeTasks.every(orderedTasks.contains)) {
+      return;
+    }
+    for (var index = 0; index < orderedTasks.length; index++) {
+      orderedTasks[index].priority = index + 1;
+    }
+    final completedTasks = target.where((task) => task.done).toList();
+    target
+      ..clear()
+      ..addAll(orderedTasks)
+      ..addAll(completedTasks);
+    _changed();
+  }
+
   void removeProjectTask(ProjectItem project, ProjectTask task) {
     project.tasks.remove(task);
-    for (final folder in project.folders) {
+    for (final folder in project.allFolders) {
       folder.tasks.remove(task);
     }
     calendarItems.removeWhere((item) => item.projectTaskId == task.id);

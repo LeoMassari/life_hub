@@ -3574,6 +3574,32 @@ Widget _projectFolderIcon(ProjectFolder folder, {double size = 22}) {
       : Text(emoji, style: TextStyle(fontSize: size));
 }
 
+typedef _ProjectFolderOption = ({ProjectFolder folder, String path, int depth});
+
+List<_ProjectFolderOption> _projectFolderOptions(ProjectItem project) {
+  final options = <_ProjectFolderOption>[];
+
+  void visit(List<ProjectFolder> folders, String parentPath, int depth) {
+    for (final folder in folders) {
+      final path = parentPath.isEmpty
+          ? folder.title
+          : '$parentPath / ${folder.title}';
+      options.add((folder: folder, path: path, depth: depth));
+      visit(folder.folders, path, depth + 1);
+    }
+  }
+
+  visit(project.folders, '', 0);
+  return options;
+}
+
+String _projectFolderPath(ProjectItem project, ProjectFolder folder) =>
+    _projectFolderOptions(project)
+        .where((option) => identical(option.folder, folder))
+        .map((option) => option.path)
+        .firstOrNull ??
+    folder.title;
+
 Future<({String title, String? emoji})?> _projectFolderDialog(
   BuildContext context, {
   ProjectFolder? folder,
@@ -3663,8 +3689,10 @@ Future<({String title, String? emoji})?> _projectFolderDialog(
       ),
     ),
   );
-  titleController.dispose();
-  emojiController.dispose();
+  Future<void>.delayed(const Duration(milliseconds: 350), () {
+    titleController.dispose();
+    emojiController.dispose();
+  });
   return result;
 }
 
@@ -3679,6 +3707,151 @@ int _compareProjectTasks(ProjectTask a, ProjectTask b) {
   final deadlineComparison = a.deadline?.compareTo(b.deadline!) ?? 0;
   if (deadlineComparison != 0) return deadlineComparison;
   return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+}
+
+Future<void> _reorderProjectTasksDialog(
+  BuildContext context,
+  AppState state,
+  ProjectItem project, {
+  ProjectFolder? folder,
+}) async {
+  final ordered = [
+    ...(folder?.tasks ?? project.tasks).where((task) => !task.done),
+  ]..sort(_compareProjectTasks);
+  if (ordered.length < 2) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Servono almeno due attività da ordinare.')),
+    );
+    return;
+  }
+  final result = await showDialog<List<ProjectTask>>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: const Text('Ordina per importanza'),
+        content: SizedBox(
+          width: 480,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'La prima attività avrà priorità 1. Usa le frecce per spostare ogni voce.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 420),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: ordered.length,
+                  itemBuilder: (context, index) {
+                    final task = ordered[index];
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          radius: 16,
+                          child: Text('${index + 1}'),
+                        ),
+                        title: Text(task.title),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'Sposta in alto',
+                              icon: const Icon(Icons.arrow_upward),
+                              onPressed: index == 0
+                                  ? null
+                                  : () {
+                                      setDialogState(() {
+                                        final item = ordered.removeAt(index);
+                                        ordered.insert(index - 1, item);
+                                      });
+                                    },
+                            ),
+                            IconButton(
+                              tooltip: 'Sposta in basso',
+                              icon: const Icon(Icons.arrow_downward),
+                              onPressed: index == ordered.length - 1
+                                  ? null
+                                  : () {
+                                      setDialogState(() {
+                                        final item = ordered.removeAt(index);
+                                        ordered.insert(index + 1, item);
+                                      });
+                                    },
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, ordered),
+            child: const Text('Salva ordine'),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (result == null) return;
+  state.reorderProjectTasks(project, folder, result);
+}
+
+const _projectDetailsPageId = 'project_details';
+const _completedProjectTasksSectionId = 'completed_tasks';
+
+Future<void> _editProjectViewPreferences(
+  BuildContext context,
+  AppState state,
+) async {
+  await showDialog<void>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: const Text('Modifica progetto'),
+        content: SizedBox(
+          width: 440,
+          child: SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Attività completate'),
+            subtitle: const Text(
+              'Mostra in fondo alla pagina le attività già concluse. I dati restano sempre salvati.',
+            ),
+            value: state.isSectionVisible(
+              _projectDetailsPageId,
+              _completedProjectTasksSectionId,
+            ),
+            onChanged: (value) {
+              state.setSectionVisible(
+                _projectDetailsPageId,
+                _completedProjectTasksSectionId,
+                value,
+              );
+              setDialogState(() {});
+            },
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Fatto'),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _ProjectCard extends StatelessWidget {
@@ -3786,7 +3959,8 @@ class _ProjectFolderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final completed = folder.tasks.where((task) => task.done).length;
+    final completed = folder.allTasks.where((task) => task.done).length;
+    final folderCount = folder.folders.length;
     return Card(
       color: Theme.of(context).colorScheme.surfaceContainerLow,
       margin: const EdgeInsets.only(bottom: 10),
@@ -3794,8 +3968,9 @@ class _ProjectFolderCard extends StatelessWidget {
         leading: _projectFolderIcon(folder),
         title: Text(folder.title),
         subtitle: Text(
-          '$completed di ${folder.tasks.length} attività · '
-          '${(folder.progress * 100).round()}%',
+          '$completed di ${folder.allTasks.length} attività · '
+          '${(folder.progress * 100).round()}%'
+          '${folderCount == 0 ? '' : ' · $folderCount sottocartell${folderCount == 1 ? 'a' : 'e'}'}',
         ),
         onTap: () => Navigator.push(
           context,
@@ -3877,6 +4052,7 @@ Future<_ProjectTaskDraft?> _projectTaskDialog(
   ProjectTask? task,
 }) async {
   final controller = TextEditingController(text: task?.title ?? '');
+  final folderOptions = _projectFolderOptions(project);
   const unassignedId = '__unassigned__';
   var destinationId = currentFolder?.id ?? unassignedId;
   final initialTasks = currentFolder?.tasks ?? project.tasks;
@@ -3945,15 +4121,15 @@ Future<_ProjectTaskDraft?> _projectTaskDialog(
                       value: unassignedId,
                       child: Text('Senza cartella'),
                     ),
-                    ...project.folders.map(
-                      (folder) => DropdownMenuItem(
-                        value: folder.id,
+                    ...folderOptions.map(
+                      (option) => DropdownMenuItem(
+                        value: option.folder.id,
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            _projectFolderIcon(folder, size: 19),
+                            _projectFolderIcon(option.folder, size: 19),
                             const SizedBox(width: 9),
-                            Text(folder.title, overflow: TextOverflow.ellipsis),
+                            Text(option.path, overflow: TextOverflow.ellipsis),
                           ],
                         ),
                       ),
@@ -3963,8 +4139,9 @@ Future<_ProjectTaskDraft?> _projectTaskDialog(
                     if (value == null) return;
                     destinationId = value;
                     if (task == null) {
-                      final destination = project.folders
-                          .where((folder) => folder.id == value)
+                      final destination = folderOptions
+                          .where((option) => option.folder.id == value)
+                          .map((option) => option.folder)
                           .firstOrNull;
                       priorityController.text = _nextProjectTaskPriority(
                         destination?.tasks ?? project.tasks,
@@ -4012,9 +4189,9 @@ Future<_ProjectTaskDraft?> _projectTaskDialog(
                 return;
               }
               ProjectFolder? destination;
-              for (final folder in project.folders) {
-                if (folder.id == destinationId) {
-                  destination = folder;
+              for (final option in folderOptions) {
+                if (option.folder.id == destinationId) {
+                  destination = option.folder;
                   break;
                 }
               }
@@ -4081,6 +4258,7 @@ Future<bool> _moveProjectTasks(
   ProjectFolder? currentFolder,
 }) async {
   if (tasks.isEmpty) return false;
+  final folderOptions = _projectFolderOptions(project);
   final destination = await showModalBottomSheet<Object>(
     context: context,
     showDragHandle: true,
@@ -4110,14 +4288,14 @@ Future<bool> _moveProjectTasks(
               onTap: () =>
                   Navigator.pop(context, _ProjectTaskDestination.unassigned),
             ),
-            ...project.folders.map(
-              (folder) => ListTile(
-                leading: _projectFolderIcon(folder),
-                title: Text(folder.title),
-                trailing: identical(folder, currentFolder)
+            ...folderOptions.map(
+              (option) => ListTile(
+                leading: _projectFolderIcon(option.folder),
+                title: Text(option.path),
+                trailing: identical(option.folder, currentFolder)
                     ? const Icon(Icons.check)
                     : null,
-                onTap: () => Navigator.pop(context, folder),
+                onTap: () => Navigator.pop(context, option.folder),
               ),
             ),
             const Divider(),
@@ -4383,8 +4561,14 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
   Widget build(BuildContext context) {
     final project = widget.project;
     final completed = project.allTasks.where((task) => task.done).length;
-    final tasks = [...project.tasks]..sort(_compareProjectTasks);
-    final selectedCount = tasks
+    final allTasks = [...project.tasks]..sort(_compareProjectTasks);
+    final activeTasks = allTasks.where((task) => !task.done).toList();
+    final completedTasks = allTasks.where((task) => task.done).toList();
+    final showCompleted = widget.s.isSectionVisible(
+      _projectDetailsPageId,
+      _completedProjectTasksSectionId,
+    );
+    final selectedCount = allTasks
         .where((task) => _selectedTaskIds.contains(task.id))
         .length;
     return Scaffold(
@@ -4404,14 +4588,23 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
             IconButton(
               tooltip: 'Sposta selezionate',
               icon: const Icon(Icons.drive_file_move_outline),
-              onPressed: selectedCount == 0 ? null : () => _moveSelected(tasks),
+              onPressed: selectedCount == 0
+                  ? null
+                  : () => _moveSelected(allTasks),
             )
-          else
+          else ...[
+            TextButton(
+              onPressed: () => _editProjectViewPreferences(context, widget.s),
+              child: const Text('Modifica'),
+            ),
             IconButton(
               tooltip: 'Seleziona più attività',
               icon: const Icon(Icons.library_add_check_outlined),
-              onPressed: tasks.isEmpty ? null : () => _setSelectionMode(true),
+              onPressed: allTasks.isEmpty
+                  ? null
+                  : () => _setSelectionMode(true),
             ),
+          ],
         ],
       ),
       floatingActionButton: _selectionMode
@@ -4471,18 +4664,34 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
             ),
             Section(
               title: 'Attività senza cartella',
-              action: IconButton(
-                tooltip: 'Aggiungi',
-                icon: const Icon(Icons.add),
-                onPressed: _addTask,
+              action: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Ordina priorità',
+                    icon: const Icon(Icons.swap_vert),
+                    onPressed: activeTasks.length < 2
+                        ? null
+                        : () => _reorderProjectTasksDialog(
+                            context,
+                            widget.s,
+                            project,
+                          ),
+                  ),
+                  IconButton(
+                    tooltip: 'Aggiungi',
+                    icon: const Icon(Icons.add),
+                    onPressed: _addTask,
+                  ),
+                ],
               ),
-              child: tasks.isEmpty
+              child: activeTasks.isEmpty
                   ? const _EmptyState(
                       icon: Icons.checklist,
-                      message: 'Le attività non assegnate appariranno qui.',
+                      message: 'Nessuna attività da completare.',
                     )
                   : Column(
-                      children: tasks
+                      children: activeTasks
                           .map(
                             (task) => _ProjectTaskTile(
                               state: widget.s,
@@ -4504,6 +4713,33 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
                           .toList(),
                     ),
             ),
+            if (showCompleted && completedTasks.isNotEmpty)
+              Section(
+                title: 'Attività completate',
+                id: _completedProjectTasksSectionId,
+                child: Column(
+                  children: completedTasks
+                      .map(
+                        (task) => _ProjectTaskTile(
+                          state: widget.s,
+                          project: project,
+                          task: task,
+                          selectionMode: _selectionMode,
+                          selected: _selectedTaskIds.contains(task.id),
+                          onSelectionChanged: (selected) {
+                            setState(() {
+                              if (selected) {
+                                _selectedTaskIds.add(task.id);
+                              } else {
+                                _selectedTaskIds.remove(task.id);
+                              }
+                            });
+                          },
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
             const SizedBox(height: 80),
           ],
         ),
@@ -4564,6 +4800,18 @@ class _ProjectFolderDetailPageState extends State<ProjectFolderDetailPage> {
     }
   }
 
+  Future<void> _addFolder() async {
+    final result = await _projectFolderDialog(context);
+    if (result != null) {
+      widget.s.addProjectFolder(
+        widget.project,
+        result.title,
+        emoji: result.emoji,
+        parent: widget.folder,
+      );
+    }
+  }
+
   void _setSelectionMode(bool value) {
     setState(() {
       _selectionMode = value;
@@ -4588,9 +4836,15 @@ class _ProjectFolderDetailPageState extends State<ProjectFolderDetailPage> {
   @override
   Widget build(BuildContext context) {
     final folder = widget.folder;
-    final completed = folder.tasks.where((task) => task.done).length;
-    final tasks = [...folder.tasks]..sort(_compareProjectTasks);
-    final selectedCount = tasks
+    final completed = folder.allTasks.where((task) => task.done).length;
+    final allTasks = [...folder.tasks]..sort(_compareProjectTasks);
+    final activeTasks = allTasks.where((task) => !task.done).toList();
+    final completedTasks = allTasks.where((task) => task.done).toList();
+    final showCompleted = widget.s.isSectionVisible(
+      _projectDetailsPageId,
+      _completedProjectTasksSectionId,
+    );
+    final selectedCount = allTasks
         .where((task) => _selectedTaskIds.contains(task.id))
         .length;
     return Scaffold(
@@ -4613,7 +4867,9 @@ class _ProjectFolderDetailPageState extends State<ProjectFolderDetailPage> {
                   : '${folder.emoji} ${folder.title}',
             ),
             Text(
-              widget.project.title,
+              '${widget.project.title} · ${_projectFolderPath(widget.project, folder)}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
@@ -4623,14 +4879,23 @@ class _ProjectFolderDetailPageState extends State<ProjectFolderDetailPage> {
             IconButton(
               tooltip: 'Sposta selezionate',
               icon: const Icon(Icons.drive_file_move_outline),
-              onPressed: selectedCount == 0 ? null : () => _moveSelected(tasks),
+              onPressed: selectedCount == 0
+                  ? null
+                  : () => _moveSelected(allTasks),
             )
-          else
+          else ...[
+            TextButton(
+              onPressed: () => _editProjectViewPreferences(context, widget.s),
+              child: const Text('Modifica'),
+            ),
             IconButton(
               tooltip: 'Seleziona più attività',
               icon: const Icon(Icons.library_add_check_outlined),
-              onPressed: tasks.isEmpty ? null : () => _setSelectionMode(true),
+              onPressed: allTasks.isEmpty
+                  ? null
+                  : () => _setSelectionMode(true),
             ),
+          ],
         ],
       ),
       floatingActionButton: _selectionMode
@@ -4658,24 +4923,65 @@ class _ProjectFolderDetailPageState extends State<ProjectFolderDetailPage> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   const SizedBox(height: 10),
-                  Text('$completed di ${folder.tasks.length} attività'),
+                  Text('$completed di ${folder.allTasks.length} attività'),
                 ],
               ),
             ),
             Section(
-              title: 'Attività',
+              title: 'Sottocartelle',
               action: IconButton(
-                tooltip: 'Aggiungi attività',
-                icon: const Icon(Icons.add),
-                onPressed: _addTask,
+                tooltip: 'Aggiungi sottocartella',
+                icon: const Icon(Icons.create_new_folder_outlined),
+                onPressed: _addFolder,
               ),
-              child: tasks.isEmpty
+              child: folder.folders.isEmpty
                   ? const _EmptyState(
-                      icon: Icons.checklist,
-                      message: 'Aggiungi la prima attività della cartella.',
+                      icon: Icons.folder_open_outlined,
+                      message: 'Crea una cartella dentro questa cartella.',
                     )
                   : Column(
-                      children: tasks
+                      children: folder.folders
+                          .map(
+                            (childFolder) => _ProjectFolderCard(
+                              s: widget.s,
+                              project: widget.project,
+                              folder: childFolder,
+                            ),
+                          )
+                          .toList(),
+                    ),
+            ),
+            Section(
+              title: 'Attività',
+              action: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Ordina priorità',
+                    icon: const Icon(Icons.swap_vert),
+                    onPressed: activeTasks.length < 2
+                        ? null
+                        : () => _reorderProjectTasksDialog(
+                            context,
+                            widget.s,
+                            widget.project,
+                            folder: folder,
+                          ),
+                  ),
+                  IconButton(
+                    tooltip: 'Aggiungi attività',
+                    icon: const Icon(Icons.add),
+                    onPressed: _addTask,
+                  ),
+                ],
+              ),
+              child: activeTasks.isEmpty
+                  ? const _EmptyState(
+                      icon: Icons.checklist,
+                      message: 'Nessuna attività da completare.',
+                    )
+                  : Column(
+                      children: activeTasks
                           .map(
                             (task) => _ProjectTaskTile(
                               state: widget.s,
@@ -4698,6 +5004,34 @@ class _ProjectFolderDetailPageState extends State<ProjectFolderDetailPage> {
                           .toList(),
                     ),
             ),
+            if (showCompleted && completedTasks.isNotEmpty)
+              Section(
+                title: 'Attività completate',
+                id: _completedProjectTasksSectionId,
+                child: Column(
+                  children: completedTasks
+                      .map(
+                        (task) => _ProjectTaskTile(
+                          state: widget.s,
+                          project: widget.project,
+                          task: task,
+                          currentFolder: folder,
+                          selectionMode: _selectionMode,
+                          selected: _selectedTaskIds.contains(task.id),
+                          onSelectionChanged: (selected) {
+                            setState(() {
+                              if (selected) {
+                                _selectedTaskIds.add(task.id);
+                              } else {
+                                _selectedTaskIds.remove(task.id);
+                              }
+                            });
+                          },
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
             const SizedBox(height: 80),
           ],
         ),

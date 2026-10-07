@@ -277,22 +277,40 @@ class ProjectFolder {
     required this.title,
     this.emoji,
     List<ProjectTask>? tasks,
-  }) : tasks = tasks ?? [];
+    List<ProjectFolder>? folders,
+  }) : tasks = tasks ?? [],
+       folders = folders ?? [];
 
   final String id;
   String title;
   String? emoji;
   final List<ProjectTask> tasks;
+  final List<ProjectFolder> folders;
 
-  double get progress => tasks.isEmpty
+  Iterable<ProjectTask> get allTasks sync* {
+    yield* tasks;
+    for (final folder in folders) {
+      yield* folder.allTasks;
+    }
+  }
+
+  Iterable<ProjectFolder> get allFolders sync* {
+    for (final folder in folders) {
+      yield folder;
+      yield* folder.allFolders;
+    }
+  }
+
+  double get progress => allTasks.isEmpty
       ? 0
-      : tasks.where((task) => task.done).length / tasks.length;
+      : allTasks.where((task) => task.done).length / allTasks.length;
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,
     'emoji': emoji,
     'tasks': tasks.map((task) => task.toJson()).toList(),
+    'folders': folders.map((folder) => folder.toJson()).toList(),
   };
 
   factory ProjectFolder.fromJson(Map<String, dynamic> json) => ProjectFolder(
@@ -303,6 +321,12 @@ class ProjectFolder {
         .map(
           (task) =>
               ProjectTask.fromJson(Map<String, dynamic>.from(task as Map)),
+        )
+        .toList(),
+    folders: (json['folders'] as List<dynamic>? ?? const [])
+        .map(
+          (folder) =>
+              ProjectFolder.fromJson(Map<String, dynamic>.from(folder as Map)),
         )
         .toList(),
   );
@@ -325,7 +349,14 @@ class ProjectItem {
   Iterable<ProjectTask> get allTasks sync* {
     yield* tasks;
     for (final folder in folders) {
-      yield* folder.tasks;
+      yield* folder.allTasks;
+    }
+  }
+
+  Iterable<ProjectFolder> get allFolders sync* {
+    for (final folder in folders) {
+      yield folder;
+      yield* folder.allFolders;
     }
   }
 
