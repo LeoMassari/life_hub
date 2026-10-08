@@ -632,6 +632,17 @@ class AppState extends ChangeNotifier {
     _changed();
   }
 
+  void reorderProjects(List<ProjectItem> orderedProjects) {
+    if (orderedProjects.length != projects.length ||
+        !projects.every(orderedProjects.contains)) {
+      return;
+    }
+    projects
+      ..clear()
+      ..addAll(orderedProjects);
+    _changed();
+  }
+
   void removeProject(ProjectItem project) {
     final taskIds = project.allTasks.map((task) => task.id).toSet();
     calendarItems.removeWhere((item) => taskIds.contains(item.projectTaskId));

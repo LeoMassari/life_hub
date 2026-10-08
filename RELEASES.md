@@ -5,6 +5,16 @@ Ogni aggiornamento completato produce due archivi nella cartella `releases/`:
 - `life_hub-source-vX.Y.Z.zip`: progetto Flutter completo, senza cronologia Git o file temporanei;
 - `life_hub-web-vX.Y.Z.zip`: applicazione web compilata, pronta per essere pubblicata su un servizio di hosting.
 
+## 0.15.0
+
+- Invio sulla tastiera attiva Salva in tutti i moduli di modifica;
+- ordine di visualizzazione dei progetti modificabile trascinandoli da **Modifica**;
+- priorità delle attività riordinabili trascinando la nuova maniglia a due linee;
+- priorità iniziale vuota quando si crea una nuova attività di progetto;
+- dettatura vocale dell'Assistente tramite il pulsante **Parla**, con richiesta del permesso per il microfono, trascrizione in italiano e anteprima da confermare;
+- configurazione dei permessi vocali per web, Android e iOS;
+- nuovi controlli automatici per salvataggio con Invio, ordinamento e interfaccia vocale.
+
 ## 0.14.0
 
 - collegamento rapido all'Assistente AI in cima alla pagina Oggi;

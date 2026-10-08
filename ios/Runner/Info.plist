@@ -51,6 +51,10 @@
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Life Hub usa le foto che scegli per personalizzare sfondo e widget.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Life Hub usa il microfono soltanto quando detti un comando all'assistente.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Life Hub trascrive i comandi vocali per mostrarti un'anteprima prima della conferma.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

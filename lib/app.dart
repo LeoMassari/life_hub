@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'data/local_store.dart';
 import 'models/models.dart';
 import 'services/assistant_service.dart';
@@ -464,12 +465,14 @@ class PageBody extends StatelessWidget {
     this.state,
     this.pageId,
     this.topContent,
+    this.onReorderItems,
   });
   final String title, subtitle;
   final List<Widget> children;
   final AppState? state;
   final String? pageId;
   final Widget? topContent;
+  final Future<void> Function(BuildContext context)? onReorderItems;
 
   List<Section> _orderedSections() {
     final sections = children.whereType<Section>().toList();
@@ -495,6 +498,7 @@ class PageBody extends StatelessWidget {
   Future<void> _editSections(BuildContext context) async {
     final appState = state;
     if (appState == null) return;
+    final pageContext = context;
     final currentPageId = pageId ?? title;
     final sections = _orderedSections();
     await showDialog<void>(
@@ -564,6 +568,23 @@ class PageBody extends StatelessWidget {
                     },
                   ),
                 ),
+                if (onReorderItems != null) ...[
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.reorder),
+                      label: const Text('Ordine dei progetti'),
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await Future<void>.delayed(Duration.zero);
+                        if (pageContext.mounted) {
+                          await onReorderItems!(pageContext);
+                        }
+                      },
+                    ),
+                  ),
+                ],
                 const Divider(height: 24),
                 Text(
                   'Sfondo della pagina',
@@ -766,28 +787,30 @@ Future<String?> _textDialog(
   final controller = TextEditingController(text: initialValue);
   return showDialog<String>(
     context: c,
-    builder: (c) => AlertDialog(
-      title: Text(title),
-      content: TextField(
-        controller: controller,
-        autofocus: true,
-        onTap: () => controller.selection = TextSelection(
-          baseOffset: 0,
-          extentOffset: controller.text.length,
+    builder: (c) {
+      void submit() => Navigator.pop(c, controller.text.trim());
+      return AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => submit(),
+          onTap: () => controller.selection = TextSelection(
+            baseOffset: 0,
+            extentOffset: controller.text.length,
+          ),
+          decoration: InputDecoration(hintText: hint),
         ),
-        decoration: InputDecoration(hintText: hint),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(c),
-          child: const Text('Annulla'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(c, controller.text.trim()),
-          child: const Text('Salva'),
-        ),
-      ],
-    ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(onPressed: submit, child: const Text('Salva')),
+        ],
+      );
+    },
   );
 }
 
@@ -802,79 +825,84 @@ Future<({String title, String? time})?> _todayTaskDialog(
   final result = await showDialog<({String title, String? time})>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        title: Text(dialogTitle),
-        content: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: 'Attività',
-                  hintText: 'Cosa vuoi fare?',
-                  errorText: error,
+      builder: (context, setDialogState) {
+        void submit() {
+          final title = titleController.text.trim();
+          if (title.isEmpty) {
+            setDialogState(() => error = 'Inserisci un nome');
+            return;
+          }
+          Navigator.pop(context, (title: title, time: selectedTime));
+        }
+
+        return AlertDialog(
+          title: Text(dialogTitle),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  autofocus: true,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => submit(),
+                  decoration: InputDecoration(
+                    labelText: 'Attività',
+                    hintText: 'Cosa vuoi fare?',
+                    errorText: error,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.schedule),
-                title: Text(selectedTime ?? 'Nessun orario'),
-                subtitle: const Text('L’orario è facoltativo'),
-                trailing: selectedTime == null
-                    ? const Icon(Icons.chevron_right)
-                    : IconButton(
-                        tooltip: 'Rimuovi orario',
-                        icon: const Icon(Icons.close),
-                        onPressed: () =>
-                            setDialogState(() => selectedTime = null),
-                      ),
-                onTap: () async {
-                  final parts = selectedTime?.split(':');
-                  final initial = parts?.length == 2
-                      ? TimeOfDay(
-                          hour: int.tryParse(parts![0]) ?? TimeOfDay.now().hour,
-                          minute:
-                              int.tryParse(parts[1]) ?? TimeOfDay.now().minute,
-                        )
-                      : TimeOfDay.now();
-                  final picked = await showTimePicker(
-                    context: context,
-                    initialTime: initial,
-                  );
-                  if (picked != null) {
-                    setDialogState(() {
-                      selectedTime =
-                          '${picked.hour.toString().padLeft(2, '0')}:'
-                          '${picked.minute.toString().padLeft(2, '0')}';
-                    });
-                  }
-                },
-              ),
-            ],
+                const SizedBox(height: 12),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.schedule),
+                  title: Text(selectedTime ?? 'Nessun orario'),
+                  subtitle: const Text('L’orario è facoltativo'),
+                  trailing: selectedTime == null
+                      ? const Icon(Icons.chevron_right)
+                      : IconButton(
+                          tooltip: 'Rimuovi orario',
+                          icon: const Icon(Icons.close),
+                          onPressed: () =>
+                              setDialogState(() => selectedTime = null),
+                        ),
+                  onTap: () async {
+                    final parts = selectedTime?.split(':');
+                    final initial = parts?.length == 2
+                        ? TimeOfDay(
+                            hour:
+                                int.tryParse(parts![0]) ?? TimeOfDay.now().hour,
+                            minute:
+                                int.tryParse(parts[1]) ??
+                                TimeOfDay.now().minute,
+                          )
+                        : TimeOfDay.now();
+                    final picked = await showTimePicker(
+                      context: context,
+                      initialTime: initial,
+                    );
+                    if (picked != null) {
+                      setDialogState(() {
+                        selectedTime =
+                            '${picked.hour.toString().padLeft(2, '0')}:'
+                            '${picked.minute.toString().padLeft(2, '0')}';
+                      });
+                    }
+                  },
+                ),
+              ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annulla'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final title = titleController.text.trim();
-              if (title.isEmpty) {
-                setDialogState(() => error = 'Inserisci un nome');
-                return;
-              }
-              Navigator.pop(context, (title: title, time: selectedTime));
-            },
-            child: const Text('Salva'),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annulla'),
+            ),
+            FilledButton(onPressed: submit, child: const Text('Salva')),
+          ],
+        );
+      },
     ),
   );
   return result;
@@ -910,67 +938,72 @@ Future<({String label, double amount})?> _movementDialog(
   final result = await showDialog<({String label, double amount})>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        title: const Text('Nuovo movimento'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(value: false, label: Text('Uscita')),
-                ButtonSegment(value: true, label: Text('Entrata')),
-              ],
-              selected: {isIncome},
-              onSelectionChanged: (value) =>
-                  setDialogState(() => isIncome = value.first),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: labelController,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Descrizione',
-                hintText: 'Es. Spesa settimanale',
+      builder: (context, setDialogState) {
+        void submit() {
+          final label = labelController.text.trim();
+          final parsed = double.tryParse(
+            amountController.text.trim().replaceAll(',', '.'),
+          );
+          if (label.isEmpty || parsed == null || parsed <= 0) {
+            setDialogState(() => error = 'Inserisci un importo valido');
+            return;
+          }
+          Navigator.pop(context, (
+            label: label,
+            amount: isIncome ? parsed : -parsed,
+          ));
+        }
+
+        return AlertDialog(
+          title: const Text('Nuovo movimento'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(value: false, label: Text('Uscita')),
+                  ButtonSegment(value: true, label: Text('Entrata')),
+                ],
+                selected: {isIncome},
+                onSelectionChanged: (value) =>
+                    setDialogState(() => isIncome = value.first),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: amountController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
+              const SizedBox(height: 16),
+              TextField(
+                controller: labelController,
+                autofocus: true,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => submit(),
+                decoration: const InputDecoration(
+                  labelText: 'Descrizione',
+                  hintText: 'Es. Spesa settimanale',
+                ),
               ),
-              decoration: InputDecoration(
-                labelText: 'Importo',
-                suffixText: '€',
-                errorText: error,
+              const SizedBox(height: 12),
+              TextField(
+                controller: amountController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => submit(),
+                decoration: InputDecoration(
+                  labelText: 'Importo',
+                  suffixText: '€',
+                  errorText: error,
+                ),
               ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annulla'),
             ),
+            FilledButton(onPressed: submit, child: const Text('Salva')),
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annulla'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final label = labelController.text.trim();
-              final parsed = double.tryParse(
-                amountController.text.trim().replaceAll(',', '.'),
-              );
-              if (label.isEmpty || parsed == null || parsed <= 0) {
-                setDialogState(() => error = 'Inserisci un importo valido');
-                return;
-              }
-              Navigator.pop(context, (
-                label: label,
-                amount: isIncome ? parsed : -parsed,
-              ));
-            },
-            child: const Text('Salva'),
-          ),
-        ],
-      ),
+        );
+      },
     ),
   );
   labelController.dispose();
@@ -1631,72 +1664,79 @@ Future<({String person, double total, double paid})?> _debtDialog(
   final result = await showDialog<({String person, double total, double paid})>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        title: Text(debt == null ? 'Nuovo debito' : 'Modifica debito'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: person,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: 'Con chi'),
+      builder: (context, setDialogState) {
+        void submit() {
+          final name = person.text.trim();
+          final totalValue = _parseAmount(total.text);
+          final paidValue = paid.text.trim().isEmpty
+              ? 0.0
+              : _parseAmount(paid.text);
+          if (name.isEmpty ||
+              totalValue == null ||
+              totalValue <= 0 ||
+              paidValue == null ||
+              paidValue < 0 ||
+              paidValue > totalValue) {
+            setDialogState(() => error = 'Controlla gli importi inseriti');
+            return;
+          }
+          Navigator.pop(context, (
+            person: name,
+            total: totalValue,
+            paid: paidValue,
+          ));
+        }
+
+        return AlertDialog(
+          title: Text(debt == null ? 'Nuovo debito' : 'Modifica debito'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: person,
+                autofocus: true,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => submit(),
+                decoration: const InputDecoration(labelText: 'Con chi'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: total,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => submit(),
+                decoration: const InputDecoration(
+                  labelText: 'Importo totale',
+                  suffixText: '€',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: paid,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => submit(),
+                decoration: InputDecoration(
+                  labelText: 'Importo già dato',
+                  suffixText: '€',
+                  errorText: error,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annulla'),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: total,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'Importo totale',
-                suffixText: '€',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: paid,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: InputDecoration(
-                labelText: 'Importo già dato',
-                suffixText: '€',
-                errorText: error,
-              ),
-            ),
+            FilledButton(onPressed: submit, child: const Text('Salva')),
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annulla'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final name = person.text.trim();
-              final totalValue = _parseAmount(total.text);
-              final paidValue = paid.text.trim().isEmpty
-                  ? 0.0
-                  : _parseAmount(paid.text);
-              if (name.isEmpty ||
-                  totalValue == null ||
-                  totalValue <= 0 ||
-                  paidValue == null ||
-                  paidValue < 0 ||
-                  paidValue > totalValue) {
-                setDialogState(() => error = 'Controlla gli importi inseriti');
-                return;
-              }
-              Navigator.pop(context, (
-                person: name,
-                total: totalValue,
-                paid: paidValue,
-              ));
-            },
-            child: const Text('Salva'),
-          ),
-        ],
-      ),
+        );
+      },
     ),
   );
   person.dispose();
@@ -1717,54 +1757,59 @@ Future<({String title, double amount})?> _recurringExpenseDialog(
   final result = await showDialog<({String title, double amount})>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        title: Text(
-          expense == null ? 'Nuova spesa ricorrente' : 'Modifica spesa',
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: title,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Descrizione',
-                hintText: 'Es. Affitto',
+      builder: (context, setDialogState) {
+        void submit() {
+          final label = title.text.trim();
+          final value = _parseAmount(amount.text);
+          if (label.isEmpty || value == null || value <= 0) {
+            setDialogState(() => error = 'Inserisci un importo valido');
+            return;
+          }
+          Navigator.pop(context, (title: label, amount: value));
+        }
+
+        return AlertDialog(
+          title: Text(
+            expense == null ? 'Nuova spesa ricorrente' : 'Modifica spesa',
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: title,
+                autofocus: true,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => submit(),
+                decoration: const InputDecoration(
+                  labelText: 'Descrizione',
+                  hintText: 'Es. Affitto',
+                ),
               ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: amount,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => submit(),
+                decoration: InputDecoration(
+                  labelText: 'Importo mensile',
+                  suffixText: '€',
+                  errorText: error,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annulla'),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: amount,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: InputDecoration(
-                labelText: 'Importo mensile',
-                suffixText: '€',
-                errorText: error,
-              ),
-            ),
+            FilledButton(onPressed: submit, child: const Text('Salva')),
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annulla'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final label = title.text.trim();
-              final value = _parseAmount(amount.text);
-              if (label.isEmpty || value == null || value <= 0) {
-                setDialogState(() => error = 'Inserisci un importo valido');
-                return;
-              }
-              Navigator.pop(context, (title: label, amount: value));
-            },
-            child: const Text('Salva'),
-          ),
-        ],
-      ),
+        );
+      },
     ),
   );
   title.dispose();
@@ -1780,36 +1825,39 @@ Future<double?> _salaryDialog(BuildContext context, double current) async {
   final result = await showDialog<double>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        title: const Text('Stipendio mensile'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-            labelText: 'Importo netto',
-            suffixText: '€',
-            errorText: error,
+      builder: (context, setDialogState) {
+        void submit() {
+          final value = _parseAmount(controller.text);
+          if (value == null || value <= 0) {
+            setDialogState(() => error = 'Inserisci un importo valido');
+            return;
+          }
+          Navigator.pop(context, value);
+        }
+
+        return AlertDialog(
+          title: const Text('Stipendio mensile'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => submit(),
+            decoration: InputDecoration(
+              labelText: 'Importo netto',
+              suffixText: '€',
+              errorText: error,
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annulla'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final value = _parseAmount(controller.text);
-              if (value == null || value <= 0) {
-                setDialogState(() => error = 'Inserisci un importo valido');
-                return;
-              }
-              Navigator.pop(context, value);
-            },
-            child: const Text('Salva'),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annulla'),
+            ),
+            FilledButton(onPressed: submit, child: const Text('Salva')),
+          ],
+        );
+      },
     ),
   );
   controller.dispose();
@@ -2233,88 +2281,97 @@ _goalDialog(BuildContext context, {GoalItem? goal}) async {
       >(
         context: context,
         builder: (context) => StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-            title: Text(
-              goal == null ? 'Nuovo obiettivo economico' : 'Modifica obiettivo',
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: title,
-                    autofocus: true,
-                    decoration: const InputDecoration(labelText: 'Titolo'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: target,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Obiettivo da raggiungere',
-                      suffixText: '€',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: saved,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: 'Già accantonato',
-                      suffixText: '€',
-                      errorText: error,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: description,
-                    minLines: 3,
-                    maxLines: 5,
-                    decoration: const InputDecoration(
-                      labelText: 'Descrizione',
-                      alignLabelWithHint: true,
-                    ),
-                  ),
-                ],
+          builder: (context, setDialogState) {
+            void submit() {
+              final name = title.text.trim();
+              final targetValue = _parseAmount(target.text);
+              final savedValue = saved.text.trim().isEmpty
+                  ? 0.0
+                  : _parseAmount(saved.text);
+              if (name.isEmpty ||
+                  targetValue == null ||
+                  targetValue <= 0 ||
+                  savedValue == null ||
+                  savedValue < 0) {
+                setDialogState(() => error = 'Controlla gli importi inseriti');
+                return;
+              }
+              Navigator.pop(context, (
+                title: name,
+                target: targetValue,
+                saved: savedValue,
+                description: description.text.trim(),
+              ));
+            }
+
+            return AlertDialog(
+              title: Text(
+                goal == null
+                    ? 'Nuovo obiettivo economico'
+                    : 'Modifica obiettivo',
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Annulla'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: title,
+                      autofocus: true,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => submit(),
+                      decoration: const InputDecoration(labelText: 'Titolo'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: target,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => submit(),
+                      decoration: const InputDecoration(
+                        labelText: 'Obiettivo da raggiungere',
+                        suffixText: '€',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: saved,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => submit(),
+                      decoration: InputDecoration(
+                        labelText: 'Già accantonato',
+                        suffixText: '€',
+                        errorText: error,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: description,
+                      minLines: 3,
+                      maxLines: 5,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => submit(),
+                      decoration: const InputDecoration(
+                        labelText: 'Descrizione',
+                        alignLabelWithHint: true,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              FilledButton(
-                onPressed: () {
-                  final name = title.text.trim();
-                  final targetValue = _parseAmount(target.text);
-                  final savedValue = saved.text.trim().isEmpty
-                      ? 0.0
-                      : _parseAmount(saved.text);
-                  if (name.isEmpty ||
-                      targetValue == null ||
-                      targetValue <= 0 ||
-                      savedValue == null ||
-                      savedValue < 0) {
-                    setDialogState(
-                      () => error = 'Controlla gli importi inseriti',
-                    );
-                    return;
-                  }
-                  Navigator.pop(context, (
-                    title: name,
-                    target: targetValue,
-                    saved: savedValue,
-                    description: description.text.trim(),
-                  ));
-                },
-                child: const Text('Salva'),
-              ),
-            ],
-          ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Annulla'),
+                ),
+                FilledButton(onPressed: submit, child: const Text('Salva')),
+              ],
+            );
+          },
         ),
       );
   title.dispose();
@@ -2522,6 +2579,7 @@ class ProjectsPage extends StatelessWidget {
     subtitle: 'Trasforma le idee in azioni organizzate',
     state: s,
     pageId: 'goals',
+    onReorderItems: (context) => _reorderProjectsDialog(context, s),
     children: [
       Section(
         title: 'I tuoi progetti',
@@ -2550,6 +2608,70 @@ class ProjectsPage extends StatelessWidget {
       ),
     ],
   );
+}
+
+Future<void> _reorderProjectsDialog(
+  BuildContext context,
+  AppState state,
+) async {
+  final ordered = List<ProjectItem>.of(state.projects);
+  if (ordered.length < 2) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Servono almeno due progetti da ordinare.')),
+    );
+    return;
+  }
+  final result = await showDialog<List<ProjectItem>>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: const Text('Ordine dei progetti'),
+        content: SizedBox(
+          width: 460,
+          height: math.min(ordered.length * 72.0, 430),
+          child: ReorderableListView.builder(
+            buildDefaultDragHandles: false,
+            itemCount: ordered.length,
+            onReorderItem: (oldIndex, newIndex) {
+              setDialogState(() {
+                final project = ordered.removeAt(oldIndex);
+                ordered.insert(newIndex, project);
+              });
+            },
+            itemBuilder: (context, index) {
+              final project = ordered[index];
+              return Card.outlined(
+                key: ValueKey(project.id),
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  leading: ReorderableDragStartListener(
+                    index: index,
+                    child: const Tooltip(
+                      message: 'Trascina per riordinare',
+                      child: Icon(Icons.drag_handle),
+                    ),
+                  ),
+                  title: Text(project.title),
+                  trailing: _projectIcon(project.emoji),
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annulla'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, ordered),
+            child: const Text('Salva ordine'),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (result != null) state.reorderProjects(result);
 }
 
 class DeadlinesPage extends StatelessWidget {
@@ -2704,77 +2826,79 @@ Future<({String title, int target, RoutinePeriod period})?> _routineDialog(
   return showDialog<({String title, int target, RoutinePeriod period})>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        title: Text(routine == null ? 'Nuova routine' : 'Modifica routine'),
-        content: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Nome della routine',
-                  hintText: 'Es. Bere acqua',
+      builder: (context, setDialogState) {
+        void submit() {
+          final title = titleController.text.trim();
+          final target = int.tryParse(targetController.text.trim());
+          if (title.isEmpty || target == null || target < 1 || target > 99) {
+            setDialogState(
+              () => error = 'Inserisci un numero compreso tra 1 e 99',
+            );
+            return;
+          }
+          Navigator.pop(context, (
+            title: title,
+            target: target,
+            period: period,
+          ));
+        }
+
+        return AlertDialog(
+          title: Text(routine == null ? 'Nuova routine' : 'Modifica routine'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  autofocus: true,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => submit(),
+                  decoration: const InputDecoration(
+                    labelText: 'Nome della routine',
+                    hintText: 'Es. Bere acqua',
+                  ),
                 ),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: targetController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: 'Numero di volte',
-                  errorText: error,
+                const SizedBox(height: 14),
+                TextField(
+                  controller: targetController,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => submit(),
+                  decoration: InputDecoration(
+                    labelText: 'Numero di volte',
+                    errorText: error,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 14),
-              DropdownButtonFormField<RoutinePeriod>(
-                initialValue: period,
-                decoration: const InputDecoration(labelText: 'Frequenza'),
-                items: RoutinePeriod.values
-                    .map(
-                      (value) => DropdownMenuItem(
-                        value: value,
-                        child: Text('Ogni ${_routinePeriodLabel(value)}'),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) {
-                  if (value != null) setDialogState(() => period = value);
-                },
-              ),
-            ],
+                const SizedBox(height: 14),
+                DropdownButtonFormField<RoutinePeriod>(
+                  initialValue: period,
+                  decoration: const InputDecoration(labelText: 'Frequenza'),
+                  items: RoutinePeriod.values
+                      .map(
+                        (value) => DropdownMenuItem(
+                          value: value,
+                          child: Text('Ogni ${_routinePeriodLabel(value)}'),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    if (value != null) setDialogState(() => period = value);
+                  },
+                ),
+              ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annulla'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final title = titleController.text.trim();
-              final target = int.tryParse(targetController.text.trim());
-              if (title.isEmpty ||
-                  target == null ||
-                  target < 1 ||
-                  target > 99) {
-                setDialogState(
-                  () => error = 'Inserisci un numero compreso tra 1 e 99',
-                );
-                return;
-              }
-              Navigator.pop(context, (
-                title: title,
-                target: target,
-                period: period,
-              ));
-            },
-            child: const Text('Salva'),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annulla'),
+            ),
+            FilledButton(onPressed: submit, child: const Text('Salva')),
+          ],
+        );
+      },
     ),
   );
 }
@@ -3811,93 +3935,98 @@ Future<({String title, String? emoji})?> _projectItemDialog(
   final result = await showDialog<({String title, String? emoji})>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        title: Text(
-          isProject
-              ? project == null
-                    ? 'Nuovo progetto'
-                    : 'Modifica nome e icona'
-              : folder == null
-              ? 'Nuova cartella'
-              : 'Modifica nome e icona',
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: titleController,
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: 'Nome',
-                  hintText: isProject
-                      ? 'Es. Ristrutturare lo studio'
-                      : 'Es. Preparazione, Acquisti, Documenti…',
-                  errorText: error,
-                ),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: emojiController,
-                maxLength: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Icona o emoji',
-                  hintText: 'Es. 🏠',
-                  helperText: 'Lascia vuoto per usare l’icona predefinita.',
-                ),
-                onChanged: (_) => setDialogState(() {}),
-              ),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  ChoiceChip(
-                    selected: emojiController.text.isEmpty,
-                    avatar: const Icon(Icons.folder_outlined, size: 18),
-                    label: const Text('Default'),
-                    onSelected: (_) {
-                      emojiController.clear();
-                      setDialogState(() {});
-                    },
+      builder: (context, setDialogState) {
+        void submit() {
+          final title = titleController.text.trim();
+          if (title.isEmpty) {
+            setDialogState(() => error = 'Inserisci un nome');
+            return;
+          }
+          final emoji = emojiController.text.trim();
+          Navigator.pop(context, (
+            title: title,
+            emoji: emoji.isEmpty ? null : emoji,
+          ));
+        }
+
+        return AlertDialog(
+          title: Text(
+            isProject
+                ? project == null
+                      ? 'Nuovo progetto'
+                      : 'Modifica nome e icona'
+                : folder == null
+                ? 'Nuova cartella'
+                : 'Modifica nome e icona',
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: titleController,
+                  autofocus: true,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => submit(),
+                  decoration: InputDecoration(
+                    labelText: 'Nome',
+                    hintText: isProject
+                        ? 'Es. Ristrutturare lo studio'
+                        : 'Es. Preparazione, Acquisti, Documenti…',
+                    errorText: error,
                   ),
-                  ..._projectFolderEmojis.map(
-                    (emoji) => ChoiceChip(
-                      selected: emojiController.text == emoji,
-                      label: Text(emoji),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: emojiController,
+                  maxLength: 4,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => submit(),
+                  decoration: const InputDecoration(
+                    labelText: 'Icona o emoji',
+                    hintText: 'Es. 🏠',
+                    helperText: 'Lascia vuoto per usare l’icona predefinita.',
+                  ),
+                  onChanged: (_) => setDialogState(() {}),
+                ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ChoiceChip(
+                      selected: emojiController.text.isEmpty,
+                      avatar: const Icon(Icons.folder_outlined, size: 18),
+                      label: const Text('Default'),
                       onSelected: (_) {
-                        emojiController.text = emoji;
+                        emojiController.clear();
                         setDialogState(() {});
                       },
                     ),
-                  ),
-                ],
-              ),
-            ],
+                    ..._projectFolderEmojis.map(
+                      (emoji) => ChoiceChip(
+                        selected: emojiController.text == emoji,
+                        label: Text(emoji),
+                        onSelected: (_) {
+                          emojiController.text = emoji;
+                          setDialogState(() {});
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annulla'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final title = titleController.text.trim();
-              if (title.isEmpty) {
-                setDialogState(() => error = 'Inserisci un nome');
-                return;
-              }
-              final emoji = emojiController.text.trim();
-              Navigator.pop(context, (
-                title: title,
-                emoji: emoji.isEmpty ? null : emoji,
-              ));
-            },
-            child: const Text('Salva'),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annulla'),
+            ),
+            FilledButton(onPressed: submit, child: const Text('Salva')),
+          ],
+        );
+      },
     ),
   );
   Future<void>.delayed(const Duration(milliseconds: 350), () {
@@ -3947,54 +4076,46 @@ Future<void> _reorderProjectTasksDialog(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'La prima attività avrà priorità 1. Usa le frecce per spostare ogni voce.',
+                'La prima attività avrà priorità 1. Trascina le righe usando l’icona a sinistra del numero.',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 12),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 420),
-                child: ListView.builder(
+                child: ReorderableListView.builder(
+                  buildDefaultDragHandles: false,
                   shrinkWrap: true,
                   itemCount: ordered.length,
+                  onReorderItem: (oldIndex, newIndex) {
+                    setDialogState(() {
+                      final task = ordered.removeAt(oldIndex);
+                      ordered.insert(newIndex, task);
+                    });
+                  },
                   itemBuilder: (context, index) {
                     final task = ordered[index];
                     return Card(
+                      key: ValueKey(task.id),
                       margin: const EdgeInsets.only(bottom: 8),
                       child: ListTile(
-                        leading: CircleAvatar(
-                          radius: 16,
-                          child: Text('${index + 1}'),
-                        ),
-                        title: Text(task.title),
-                        trailing: Row(
+                        leading: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            IconButton(
-                              tooltip: 'Sposta in alto',
-                              icon: const Icon(Icons.arrow_upward),
-                              onPressed: index == 0
-                                  ? null
-                                  : () {
-                                      setDialogState(() {
-                                        final item = ordered.removeAt(index);
-                                        ordered.insert(index - 1, item);
-                                      });
-                                    },
+                            ReorderableDragStartListener(
+                              index: index,
+                              child: const Tooltip(
+                                message: 'Trascina per riordinare',
+                                child: Icon(Icons.drag_handle),
+                              ),
                             ),
-                            IconButton(
-                              tooltip: 'Sposta in basso',
-                              icon: const Icon(Icons.arrow_downward),
-                              onPressed: index == ordered.length - 1
-                                  ? null
-                                  : () {
-                                      setDialogState(() {
-                                        final item = ordered.removeAt(index);
-                                        ordered.insert(index + 1, item);
-                                      });
-                                    },
+                            const SizedBox(width: 10),
+                            CircleAvatar(
+                              radius: 16,
+                              child: Text('${index + 1}'),
                             ),
                           ],
                         ),
+                        title: Text(task.title),
                       ),
                     );
                   },
@@ -4269,11 +4390,8 @@ Future<_ProjectTaskDraft?> _projectTaskDialog(
   final folderOptions = _projectFolderOptions(project);
   const unassignedId = '__unassigned__';
   var destinationId = currentFolder?.id ?? unassignedId;
-  final initialTasks = currentFolder?.tasks ?? project.tasks;
   final priorityController = TextEditingController(
-    text: task == null
-        ? _nextProjectTaskPriority(initialTasks).toString()
-        : task.priority?.toString() ?? '',
+    text: task?.priority?.toString() ?? '',
   );
   DateTime? deadline = task?.deadline;
   String? error;
@@ -4281,145 +4399,145 @@ Future<_ProjectTaskDraft?> _projectTaskDialog(
   final result = await showDialog<_ProjectTaskDraft>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        title: Text(task == null ? 'Nuova attività' : 'Modifica attività'),
-        content: SingleChildScrollView(
-          child: SizedBox(
-            width: 420,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  controller: controller,
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    labelText: 'Titolo',
-                    errorText: error,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.event_outlined),
-                  title: Text(
-                    deadline == null ? 'Nessuna scadenza' : _date(deadline!),
-                  ),
-                  trailing: deadline == null
-                      ? null
-                      : IconButton(
-                          tooltip: 'Rimuovi scadenza',
-                          icon: const Icon(Icons.close),
-                          onPressed: () =>
-                              setDialogState(() => deadline = null),
-                        ),
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime.now().add(const Duration(days: 3650)),
-                      initialDate: deadline ?? DateTime.now(),
-                    );
-                    if (date != null) setDialogState(() => deadline = date);
-                  },
-                ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  initialValue: destinationId,
-                  decoration: const InputDecoration(
-                    labelText: 'Dove',
-                    prefixIcon: Icon(Icons.drive_file_move_outline),
-                  ),
-                  items: [
-                    const DropdownMenuItem(
-                      value: unassignedId,
-                      child: Text('Senza cartella'),
+      builder: (context, setDialogState) {
+        void submit() {
+          final title = controller.text.trim();
+          final priorityText = priorityController.text.trim();
+          final priority = priorityText.isEmpty
+              ? null
+              : int.tryParse(priorityText);
+          if (title.isEmpty) {
+            setDialogState(() => error = 'Inserisci un titolo');
+            return;
+          }
+          if (priorityText.isNotEmpty && (priority == null || priority < 1)) {
+            setDialogState(
+              () => priorityError = 'La priorità deve essere almeno 1',
+            );
+            return;
+          }
+          ProjectFolder? destination;
+          for (final option in folderOptions) {
+            if (option.folder.id == destinationId) {
+              destination = option.folder;
+              break;
+            }
+          }
+          Navigator.pop(context, (
+            title: title,
+            deadline: deadline,
+            folder: destination,
+            priority: priority,
+          ));
+        }
+
+        return AlertDialog(
+          title: Text(task == null ? 'Nuova attività' : 'Modifica attività'),
+          content: SingleChildScrollView(
+            child: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => submit(),
+                    decoration: InputDecoration(
+                      labelText: 'Titolo',
+                      errorText: error,
                     ),
-                    ...folderOptions.map(
-                      (option) => DropdownMenuItem(
-                        value: option.folder.id,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _projectFolderIcon(option.folder, size: 19),
-                            const SizedBox(width: 9),
-                            Text(option.path, overflow: TextOverflow.ellipsis),
-                          ],
+                  ),
+                  const SizedBox(height: 14),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.event_outlined),
+                    title: Text(
+                      deadline == null ? 'Nessuna scadenza' : _date(deadline!),
+                    ),
+                    trailing: deadline == null
+                        ? null
+                        : IconButton(
+                            tooltip: 'Rimuovi scadenza',
+                            icon: const Icon(Icons.close),
+                            onPressed: () =>
+                                setDialogState(() => deadline = null),
+                          ),
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now().add(
+                          const Duration(days: 3650),
+                        ),
+                        initialDate: deadline ?? DateTime.now(),
+                      );
+                      if (date != null) setDialogState(() => deadline = date);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue: destinationId,
+                    decoration: const InputDecoration(
+                      labelText: 'Dove',
+                      prefixIcon: Icon(Icons.drive_file_move_outline),
+                    ),
+                    items: [
+                      const DropdownMenuItem(
+                        value: unassignedId,
+                        child: Text('Senza cartella'),
+                      ),
+                      ...folderOptions.map(
+                        (option) => DropdownMenuItem(
+                          value: option.folder.id,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _projectFolderIcon(option.folder, size: 19),
+                              const SizedBox(width: 9),
+                              Text(
+                                option.path,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value == null) return;
-                    destinationId = value;
-                    if (task == null) {
-                      final destination = folderOptions
-                          .where((option) => option.folder.id == value)
-                          .map((option) => option.folder)
-                          .firstOrNull;
-                      priorityController.text = _nextProjectTaskPriority(
-                        destination?.tasks ?? project.tasks,
-                      ).toString();
-                    }
-                    setDialogState(() {});
-                  },
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: priorityController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Priorità',
-                    prefixIcon: Icon(Icons.format_list_numbered),
-                    helperText:
-                        '1 è la priorità più alta. Puoi lasciarla vuota.',
-                  ).copyWith(errorText: priorityError),
-                ),
-              ],
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      destinationId = value;
+                      setDialogState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: priorityController,
+                    keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => submit(),
+                    decoration: const InputDecoration(
+                      labelText: 'Priorità',
+                      prefixIcon: Icon(Icons.format_list_numbered),
+                      helperText:
+                          '1 è la priorità più alta. Puoi lasciarla vuota.',
+                    ).copyWith(errorText: priorityError),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annulla'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final title = controller.text.trim();
-              final priorityText = priorityController.text.trim();
-              final priority = priorityText.isEmpty
-                  ? null
-                  : int.tryParse(priorityText);
-              if (title.isEmpty) {
-                setDialogState(() => error = 'Inserisci un titolo');
-                return;
-              }
-              if (priorityText.isNotEmpty &&
-                  (priority == null || priority < 1)) {
-                setDialogState(
-                  () => priorityError = 'La priorità deve essere almeno 1',
-                );
-                return;
-              }
-              ProjectFolder? destination;
-              for (final option in folderOptions) {
-                if (option.folder.id == destinationId) {
-                  destination = option.folder;
-                  break;
-                }
-              }
-              Navigator.pop(context, (
-                title: title,
-                deadline: deadline,
-                folder: destination,
-                priority: priority,
-              ));
-            },
-            child: const Text('Salva'),
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annulla'),
+            ),
+            FilledButton(onPressed: submit, child: const Text('Salva')),
+          ],
+        );
+      },
     ),
   );
   // La Future del dialogo termina all'inizio dell'animazione di chiusura:
@@ -5437,15 +5555,114 @@ class AssistantPage extends StatefulWidget {
 
 class _AssistantPageState extends State<AssistantPage> {
   final _controller = TextEditingController();
+  final _speech = stt.SpeechToText();
   static const _service = LocalAssistantService();
   AssistantActionDraft? _draft;
   String? _error;
   bool _saving = false;
+  bool _speechReady = false;
+  bool _initializingSpeech = false;
+  String? _speechStatus;
 
   @override
   void dispose() {
+    unawaited(_speech.cancel());
     _controller.dispose();
     super.dispose();
+  }
+
+  Future<void> _toggleSpeech() async {
+    if (_speech.isListening) {
+      await _speech.stop();
+      if (mounted) setState(() => _speechStatus = 'Trascrizione completata');
+      return;
+    }
+    if (_initializingSpeech) return;
+    setState(() {
+      _initializingSpeech = true;
+      _error = null;
+      _speechStatus = 'Attivazione del microfono…';
+    });
+    try {
+      if (!_speechReady) {
+        _speechReady = await _speech.initialize(
+          onStatus: (status) {
+            if (!mounted) return;
+            setState(
+              () => _speechStatus = switch (status) {
+                'listening' => 'Sto ascoltando…',
+                'done' || 'notListening' => 'Trascrizione completata',
+                _ => _speechStatus,
+              },
+            );
+          },
+          onError: (error) {
+            if (!mounted) return;
+            setState(() {
+              _speechStatus = null;
+              _error = error.errorMsg.contains('permission')
+                  ? 'Il permesso per il microfono è stato negato. Abilitalo nelle impostazioni del browser e riprova.'
+                  : 'Non sono riuscito a riconoscere la voce. Riprova oppure scrivi il comando.';
+            });
+          },
+        );
+      }
+      if (!_speechReady) {
+        if (!mounted) return;
+        setState(() {
+          _error =
+              'Il riconoscimento vocale non è disponibile in questo browser. Puoi usare la dettatura della tastiera oppure provare un browser aggiornato.';
+          _speechStatus = null;
+        });
+        return;
+      }
+      String? italianLocale;
+      final locales = await _speech.locales();
+      for (final locale in locales) {
+        if (locale.localeId.toLowerCase().startsWith('it')) {
+          italianLocale = locale.localeId;
+          break;
+        }
+      }
+      await _speech.listen(
+        onResult: (result) {
+          if (!mounted) return;
+          final words = result.recognizedWords.trim();
+          if (words.isNotEmpty) {
+            _controller.value = TextEditingValue(
+              text: words,
+              selection: TextSelection.collapsed(offset: words.length),
+            );
+          }
+          if (result.finalResult && words.isNotEmpty) {
+            _analyze();
+          } else {
+            setState(() {
+              _draft = null;
+              _error = null;
+            });
+          }
+        },
+        listenOptions: stt.SpeechListenOptions(
+          localeId: italianLocale,
+          partialResults: true,
+          cancelOnError: true,
+          listenMode: stt.ListenMode.confirmation,
+          pauseFor: const Duration(seconds: 3),
+          listenFor: const Duration(seconds: 30),
+        ),
+      );
+      if (mounted) setState(() => _speechStatus = 'Sto ascoltando…');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _speechStatus = null;
+        _error =
+            'Non è stato possibile avviare il microfono. Controlla il permesso del browser e riprova.';
+      });
+    } finally {
+      if (mounted) setState(() => _initializingSpeech = false);
+    }
   }
 
   List<AssistantProjectReference> get _projectReferences => widget.s.projects
@@ -5519,21 +5736,9 @@ class _AssistantPageState extends State<AssistantPage> {
                   .where((option) => option.path == draft.folderPath)
                   .map((option) => option.folder)
                   .firstOrNull;
-        final tasks = folder?.tasks ?? project.tasks;
-        final priority = _nextProjectTaskPriority(tasks);
         final task = folder == null
-            ? widget.s.addProjectTask(
-                project,
-                draft.title,
-                draft.date,
-                priority: priority,
-              )
-            : widget.s.addProjectFolderTask(
-                folder,
-                draft.title,
-                draft.date,
-                priority: priority,
-              );
+            ? widget.s.addProjectTask(project, draft.title, draft.date)
+            : widget.s.addProjectFolderTask(folder, draft.title, draft.date);
         if (draft.date != null) {
           widget.s.scheduleProjectTask(task, draft.date!);
         }
@@ -5605,11 +5810,49 @@ class _AssistantPageState extends State<AssistantPage> {
                 ),
               ),
               const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: _analyze,
-                icon: const Icon(Icons.psychology_alt_outlined),
-                label: const Text('Interpreta'),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  FilledButton.icon(
+                    onPressed: _analyze,
+                    icon: const Icon(Icons.psychology_alt_outlined),
+                    label: const Text('Interpreta'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _initializingSpeech ? null : _toggleSpeech,
+                    icon: Icon(
+                      _speech.isListening
+                          ? Icons.stop_circle_outlined
+                          : Icons.mic_none_outlined,
+                    ),
+                    label: Text(
+                      _initializingSpeech
+                          ? 'Attivazione…'
+                          : _speech.isListening
+                          ? 'Ferma'
+                          : 'Parla',
+                    ),
+                  ),
+                ],
               ),
+              if (_speechStatus != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Row(
+                    children: [
+                      if (_speech.isListening) ...[
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 9),
+                      ],
+                      Text(_speechStatus!),
+                    ],
+                  ),
+                ),
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
