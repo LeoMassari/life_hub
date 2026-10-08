@@ -326,7 +326,14 @@ void main() {
             'id': 'project-1',
             'title': 'Casa',
             'tasks': <Map<String, dynamic>>[],
-            'folders': <Map<String, dynamic>>[],
+            'folders': [
+              {
+                'id': 'folder-1',
+                'title': 'Soggiorno',
+                'tasks': <Map<String, dynamic>>[],
+                'folders': <Map<String, dynamic>>[],
+              },
+            ],
           },
         ],
       };
@@ -377,6 +384,83 @@ void main() {
     await tester.tap(find.text('Aggiungi a Inbox'));
     await tester.pumpAndSettle();
     expect(store.value?['cycleItems']?[0]['title'], 'comprare il latte');
+  });
+
+  testWidgets('il tasto AI di Oggi aggiunge un’attività alla giornata', (
+    tester,
+  ) async {
+    final store = MemoryStore();
+    await tester.pumpWidget(LifeHubApp(store: store));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Chiedi all’Assistente AI'), findsOneWidget);
+    await tester.tap(find.text('Chiedi all’Assistente AI'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byType(TextField).first,
+      'Aggiungi fare la spesa ad Oggi',
+    );
+    await tester.tap(find.text('Interpreta'));
+    await tester.pumpAndSettle();
+    expect(find.text('Aggiungi a Oggi'), findsOneWidget);
+
+    await tester.tap(find.text('Aggiungi a Oggi'));
+    await tester.pumpAndSettle();
+    final savedTasks = store.value?['tasks'] as List<dynamic>;
+    expect(savedTasks.any((task) => task['title'] == 'fare la spesa'), isTrue);
+  });
+
+  testWidgets('l’editor del progetto mostra nome e icona', (tester) async {
+    final store = MemoryStore()
+      ..value = {
+        'projects': [
+          {
+            'id': 'project-1',
+            'title': 'Casa',
+            'tasks': <Map<String, dynamic>>[],
+            'folders': [
+              {
+                'id': 'folder-1',
+                'title': 'Soggiorno',
+                'tasks': <Map<String, dynamic>>[],
+                'folders': <Map<String, dynamic>>[],
+              },
+            ],
+          },
+        ],
+      };
+    await tester.pumpWidget(LifeHubApp(store: store));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Progetti').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(PopupMenuButton<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Modifica nome e icona'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Icona o emoji'), findsOneWidget);
+    expect(
+      find.text('Lascia vuoto per usare l’icona predefinita.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Annulla'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Casa'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Soggiorno'),
+      250,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.byType(PopupMenuButton<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Modifica nome e icona'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Icona o emoji'), findsOneWidget);
   });
 
   testWidgets('aggiunge nome e orario alle attività di oggi', (tester) async {

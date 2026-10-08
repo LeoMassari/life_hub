@@ -22,6 +22,31 @@ void main() {
     expect(draft?.title, 'comprare il latte');
   });
 
+  test('accetta in, a e ad come preposizioni per Inbox', () {
+    for (final preposition in ['in', 'a', 'ad']) {
+      final draft = service.interpret(
+        'Aggiungi fare la spesa $preposition Inbox',
+        projects: projects,
+        today: today,
+      );
+
+      expect(draft?.type, AssistantActionType.inbox);
+      expect(draft?.title, 'fare la spesa');
+    }
+  });
+
+  test('interpreta ad Oggi come attività della giornata', () {
+    final draft = service.interpret(
+      'Aggiungi fare la spesa ad Oggi',
+      projects: projects,
+      today: today,
+    );
+
+    expect(draft?.type, AssistantActionType.todayTask);
+    expect(draft?.title, 'fare la spesa');
+    expect(draft?.date, today);
+  });
+
   test('interpreta un’attività in una sottocartella di progetto', () {
     final draft = service.interpret(
       'Aggiungi montare la lampada al progetto Casa nella cartella Soggiorno',

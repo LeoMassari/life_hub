@@ -336,6 +336,7 @@ class ProjectItem {
   ProjectItem({
     required this.id,
     required this.title,
+    this.emoji,
     List<ProjectTask>? tasks,
     List<ProjectFolder>? folders,
   }) : tasks = tasks ?? [],
@@ -343,6 +344,7 @@ class ProjectItem {
 
   final String id;
   String title;
+  String? emoji;
   final List<ProjectTask> tasks;
   final List<ProjectFolder> folders;
 
@@ -367,6 +369,7 @@ class ProjectItem {
   Map<String, dynamic> toJson() => {
     'id': id,
     'title': title,
+    'emoji': emoji,
     'tasks': tasks.map((task) => task.toJson()).toList(),
     'folders': folders.map((folder) => folder.toJson()).toList(),
   };
@@ -374,6 +377,7 @@ class ProjectItem {
   factory ProjectItem.fromJson(Map<String, dynamic> json) => ProjectItem(
     id: json['id'] as String,
     title: json['title'] as String,
+    emoji: json['emoji'] as String?,
     tasks: (json['tasks'] as List<dynamic>? ?? const [])
         .map(
           (task) =>
