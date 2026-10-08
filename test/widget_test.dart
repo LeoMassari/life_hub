@@ -122,6 +122,10 @@ void main() {
 
       expect(find.text('Dove'), findsOneWidget);
       expect(find.text('Priorità'), findsOneWidget);
+      expect(
+        tester.widget<TextField>(find.byType(TextField).last).controller?.text,
+        isEmpty,
+      );
 
       await tester.enterText(
         find.byType(TextField).first,
@@ -140,6 +144,10 @@ void main() {
         'Montare la lampada',
       );
       expect(store.value?['projects']?[0]['folders']?[0]['emoji'], '🛋️');
+      expect(
+        store.value?['projects']?[0]['folders']?[0]['tasks']?[0]['priority'],
+        isNull,
+      );
     },
   );
 
@@ -220,7 +228,7 @@ void main() {
     expect(find.byTooltip('Aggiungi sottocartella'), findsOneWidget);
   });
 
-  testWidgets('riordina le priorità con i pulsanti su e giù', (tester) async {
+  testWidgets('riordina le priorità trascinando la maniglia', (tester) async {
     final store = MemoryStore()
       ..value = {
         'projects': [
@@ -246,7 +254,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Ordina per importanza'), findsOneWidget);
-    await tester.tap(find.byTooltip('Sposta in basso').first);
+    expect(find.byIcon(Icons.drag_handle), findsNWidgets(2));
+    final taskDrag = await tester.startGesture(
+      tester.getCenter(find.byIcon(Icons.drag_handle).first),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    await taskDrag.moveBy(const Offset(0, 150));
+    await tester.pump(const Duration(seconds: 1));
+    await taskDrag.up();
     await tester.pumpAndSettle();
     await tester.tap(find.text('Salva ordine'));
     await tester.pumpAndSettle();
@@ -255,6 +270,49 @@ void main() {
     expect(tasks.first['title'], 'Seconda attività');
     expect(tasks.first['priority'], 1);
     expect(tasks.last['priority'], 2);
+  });
+
+  testWidgets('riordina i progetti dal menu Modifica', (tester) async {
+    final store = MemoryStore()
+      ..value = {
+        'projects': [
+          {
+            'id': 'project-1',
+            'title': 'Casa',
+            'tasks': <Map<String, dynamic>>[],
+            'folders': <Map<String, dynamic>>[],
+          },
+          {
+            'id': 'project-2',
+            'title': 'Lavoro',
+            'tasks': <Map<String, dynamic>>[],
+            'folders': <Map<String, dynamic>>[],
+          },
+        ],
+      };
+    await tester.pumpWidget(LifeHubApp(store: store));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Progetti').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Modifica'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ordine dei progetti'));
+    await tester.pumpAndSettle();
+
+    final projectDrag = await tester.startGesture(
+      tester.getCenter(find.byIcon(Icons.drag_handle).first),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    await projectDrag.moveBy(const Offset(0, 150));
+    await tester.pump(const Duration(seconds: 1));
+    await projectDrag.up();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Salva ordine'));
+    await tester.pumpAndSettle();
+
+    expect(store.value?['projects']?[0]['title'], 'Lavoro');
+    expect(store.value?['projects']?[1]['title'], 'Casa');
   });
 
   testWidgets('sposta le completate in fondo e permette di nasconderle', (
@@ -386,6 +444,19 @@ void main() {
     expect(store.value?['cycleItems']?[0]['title'], 'comprare il latte');
   });
 
+  testWidgets('l’Assistente mostra il comando vocale', (tester) async {
+    await tester.pumpWidget(LifeHubApp(store: MemoryStore()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Altro'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Assistente'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Parla'), findsOneWidget);
+    expect(find.byIcon(Icons.mic_none_outlined), findsOneWidget);
+  });
+
   testWidgets('il tasto AI di Oggi aggiunge un’attività alla giornata', (
     tester,
   ) async {
@@ -476,6 +547,26 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Allenamento breve'), findsOneWidget);
+  });
+
+  testWidgets('Invio attiva Salva durante una modifica', (tester) async {
+    final store = MemoryStore()
+      ..value = {
+        'tasks': [
+          {'id': 'task-1', 'title': 'Titolo iniziale', 'done': false},
+        ],
+      };
+    await tester.pumpWidget(LifeHubApp(store: store));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Modifica').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'Titolo modificato');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Titolo modificato'), findsOneWidget);
+    expect(store.value?['tasks']?[0]['title'], 'Titolo modificato');
   });
 
   testWidgets('apre l’editor con ordine e sfondo della pagina', (tester) async {

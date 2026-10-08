@@ -156,6 +156,25 @@ void main() {
     expect(folder.progress, 1);
   });
 
+  test('salva il nuovo ordine di visualizzazione dei progetti', () async {
+    final store = MemoryStore();
+    final state = AppState(store);
+    await state.init();
+
+    state.addProject('Casa');
+    state.addProject('Lavoro');
+    state.reorderProjects([state.projects.last, state.projects.first]);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(state.projects.map((project) => project.title), ['Lavoro', 'Casa']);
+    final restored = AppState(store);
+    await restored.init();
+    expect(restored.projects.map((project) => project.title), [
+      'Lavoro',
+      'Casa',
+    ]);
+  });
+
   test('programma e sposta le azioni dei progetti senza duplicarle', () async {
     final store = MemoryStore();
     final state = AppState(store);

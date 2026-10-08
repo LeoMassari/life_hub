@@ -28,17 +28,25 @@ essere programmata nel calendario, ordinata con una priorità numerica oppure
 spostata singolarmente o in gruppo. Le cartelle possono avere un'icona o emoji
 personale e mantengono lo sfondo scelto per la pagina Progetti. Il pulsante
 rapido sulle schede permette di scegliere cartella, scadenza e priorità prima
-di salvare una nuova attività. Le priorità possono anche essere riordinate con
-le frecce su e giù, le cartelle possono contenere sottocartelle senza limiti di
-livello e le attività concluse vengono raccolte in fondo alla pagina. Il tasto
-**Modifica** nelle schede dei progetti permette di mostrare o nascondere la
-sezione delle completate senza eliminare i dati.
+di salvare una nuova attività; per le nuove attività la priorità resta vuota
+finché non viene scelta. Il comando per ordinare le priorità mostra una maniglia
+con due linee a sinistra: trascinandola si decide l'ordine e, al salvataggio,
+l'app assegna i numeri. Le cartelle possono contenere sottocartelle senza limiti
+di livello e le attività concluse vengono raccolte in fondo alla pagina. Il
+tasto **Modifica** nelle schede dei progetti permette di riordinare anche i
+progetti e di mostrare o nascondere la sezione delle completate senza eliminare
+i dati.
 
 Da Inbox il pulsante **Smista** trasferisce un elemento in un progetto o in una
 sottocartella. L'Assistente, raggiungibile anche dal tasto in cima a **Oggi**,
 trasforma comandi semplici in anteprime confermabili per Oggi, Inbox, Progetti e
-Calendario; la progettazione del collegamento AI sicuro e dei comandi vocali è
-descritta in [docs/ai_assistant.md](docs/ai_assistant.md).
+Calendario. Il pulsante **Parla** attiva il microfono, trascrive un breve comando
+in italiano e lo interpreta automaticamente; l'anteprima va comunque confermata
+prima di cambiare i dati. I dettagli e l'evoluzione del collegamento AI sicuro
+sono descritti in [docs/ai_assistant.md](docs/ai_assistant.md).
+
+Nei moduli di modifica, il tasto Invio della tastiera esegue la stessa azione
+del pulsante **Salva**.
 
 Per cambiare l'icona di un progetto, di una cartella o di una sottocartella,
 apri il relativo menu con i tre puntini e scegli **Modifica nome e icona**.
