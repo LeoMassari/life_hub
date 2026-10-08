@@ -463,11 +463,13 @@ class PageBody extends StatelessWidget {
     required this.children,
     this.state,
     this.pageId,
+    this.topContent,
   });
   final String title, subtitle;
   final List<Widget> children;
   final AppState? state;
   final String? pageId;
+  final Widget? topContent;
 
   List<Section> _orderedSections() {
     final sections = children.whereType<Section>().toList();
@@ -695,6 +697,7 @@ class PageBody extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 22),
+        ?topContent,
         if (visibleChildren.isEmpty)
           const _EmptyState(
             icon: Icons.visibility_off_outlined,
@@ -1153,6 +1156,23 @@ class TodayPage extends StatelessWidget {
       subtitle: 'La tua giornata a colpo d’occhio',
       state: s,
       pageId: 'today',
+      topContent: Padding(
+        padding: const EdgeInsets.only(bottom: 18),
+        child: SizedBox(
+          width: double.infinity,
+          child: FilledButton.tonalIcon(
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            ),
+            onPressed: () => Navigator.push(
+              c,
+              MaterialPageRoute<void>(builder: (_) => AssistantPage(s)),
+            ),
+            icon: const Icon(Icons.auto_awesome),
+            label: const Text('Chiedi all’Assistente AI'),
+          ),
+        ),
+      ),
       children: [
         Section(
           title: 'Progresso',
@@ -2511,12 +2531,10 @@ class ProjectsPage extends StatelessWidget {
           tooltip: 'Nuovo progetto',
           icon: const Icon(Icons.create_new_folder_outlined),
           onPressed: () async {
-            final title = await _textDialog(
-              c,
-              'Nuovo progetto',
-              hint: 'Es. Ristrutturare lo studio',
-            );
-            if (title?.isNotEmpty == true) s.addProject(title!);
+            final result = await _projectItemDialog(c, creatingProject: true);
+            if (result != null) {
+              s.addProject(result.title, emoji: result.emoji);
+            }
           },
         ),
         child: s.projects.isEmpty
@@ -3740,7 +3758,10 @@ const _projectFolderEmojis = [
 ];
 
 Widget _projectFolderIcon(ProjectFolder folder, {double size = 22}) {
-  final emoji = folder.emoji;
+  return _projectIcon(folder.emoji, size: size);
+}
+
+Widget _projectIcon(String? emoji, {double size = 22}) {
   return emoji == null || emoji.isEmpty
       ? Icon(Icons.folder_outlined, size: size)
       : Text(emoji, style: TextStyle(fontSize: size));
@@ -3772,18 +3793,34 @@ String _projectFolderPath(ProjectItem project, ProjectFolder folder) =>
         .firstOrNull ??
     folder.title;
 
-Future<({String title, String? emoji})?> _projectFolderDialog(
+Future<({String title, String? emoji})?> _projectItemDialog(
   BuildContext context, {
   ProjectFolder? folder,
+  ProjectItem? project,
+  bool creatingProject = false,
 }) async {
-  final titleController = TextEditingController(text: folder?.title ?? '');
-  final emojiController = TextEditingController(text: folder?.emoji ?? '');
+  assert(folder == null || project == null);
+  final isProject = creatingProject || project != null;
+  final titleController = TextEditingController(
+    text: project?.title ?? folder?.title ?? '',
+  );
+  final emojiController = TextEditingController(
+    text: project?.emoji ?? folder?.emoji ?? '',
+  );
   String? error;
   final result = await showDialog<({String title, String? emoji})>(
     context: context,
     builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) => AlertDialog(
-        title: Text(folder == null ? 'Nuova cartella' : 'Modifica cartella'),
+        title: Text(
+          isProject
+              ? project == null
+                    ? 'Nuovo progetto'
+                    : 'Modifica nome e icona'
+              : folder == null
+              ? 'Nuova cartella'
+              : 'Modifica nome e icona',
+        ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -3794,7 +3831,9 @@ Future<({String title, String? emoji})?> _projectFolderDialog(
                 autofocus: true,
                 decoration: InputDecoration(
                   labelText: 'Nome',
-                  hintText: 'Es. Preparazione, Acquisti, Documenti…',
+                  hintText: isProject
+                      ? 'Es. Ristrutturare lo studio'
+                      : 'Es. Preparazione, Acquisti, Documenti…',
                   errorText: error,
                 ),
               ),
@@ -3805,7 +3844,7 @@ Future<({String title, String? emoji})?> _projectFolderDialog(
                 decoration: const InputDecoration(
                   labelText: 'Icona o emoji',
                   hintText: 'Es. 🏠',
-                  helperText: 'Lascia vuoto per usare la cartella predefinita.',
+                  helperText: 'Lascia vuoto per usare l’icona predefinita.',
                 ),
                 onChanged: (_) => setDialogState(() {}),
               ),
@@ -4053,7 +4092,7 @@ class _ProjectCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.folder_outlined),
+                  _projectIcon(project.emoji),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -4080,13 +4119,16 @@ class _ProjectCard extends StatelessWidget {
                   PopupMenuButton<String>(
                     onSelected: (value) async {
                       if (value == 'edit') {
-                        final title = await _textDialog(
+                        final result = await _projectItemDialog(
                           context,
-                          'Rinomina progetto',
-                          initialValue: project.title,
+                          project: project,
                         );
-                        if (title?.isNotEmpty == true) {
-                          s.updateProject(project, title!);
+                        if (result != null) {
+                          s.updateProject(
+                            project,
+                            result.title,
+                            emoji: result.emoji,
+                          );
                         }
                       } else if (value == 'delete' &&
                           await _confirmDelete(context, project.title)) {
@@ -4094,7 +4136,10 @@ class _ProjectCard extends StatelessWidget {
                       }
                     },
                     itemBuilder: (context) => const [
-                      PopupMenuItem(value: 'edit', child: Text('Rinomina')),
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: Text('Modifica nome e icona'),
+                      ),
                       PopupMenuItem(value: 'delete', child: Text('Elimina')),
                     ],
                   ),
@@ -4154,10 +4199,7 @@ class _ProjectFolderCard extends StatelessWidget {
         trailing: PopupMenuButton<String>(
           onSelected: (value) async {
             if (value == 'edit') {
-              final result = await _projectFolderDialog(
-                context,
-                folder: folder,
-              );
+              final result = await _projectItemDialog(context, folder: folder);
               if (result != null) {
                 s.updateProjectFolder(
                   folder,
@@ -4171,7 +4213,7 @@ class _ProjectFolderCard extends StatelessWidget {
             }
           },
           itemBuilder: (context) => const [
-            PopupMenuItem(value: 'edit', child: Text('Rinomina')),
+            PopupMenuItem(value: 'edit', child: Text('Modifica nome e icona')),
             PopupMenuItem(value: 'delete', child: Text('Elimina')),
           ],
         ),
@@ -4488,7 +4530,7 @@ Future<bool> _moveProjectTasks(
   if (destination is ProjectFolder) {
     targetFolder = destination;
   } else if (destination == _ProjectTaskDestination.newFolder) {
-    final folderDraft = await _projectFolderDialog(context);
+    final folderDraft = await _projectItemDialog(context);
     if (folderDraft == null) return false;
     targetFolder = state.addProjectFolder(
       project,
@@ -4710,7 +4752,7 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
   }
 
   Future<void> _addFolder() async {
-    final result = await _projectFolderDialog(context);
+    final result = await _projectItemDialog(context);
     if (result != null) {
       widget.s.addProjectFolder(
         widget.project,
@@ -4764,7 +4806,11 @@ class _ProjectDetailPageState extends State<ProjectDetailPage> {
               )
             : null,
         title: Text(
-          _selectionMode ? '$selectedCount selezionate' : project.title,
+          _selectionMode
+              ? '$selectedCount selezionate'
+              : project.emoji == null || project.emoji!.isEmpty
+              ? project.title
+              : '${project.emoji} ${project.title}',
         ),
         actions: [
           if (_selectionMode)
@@ -4984,7 +5030,7 @@ class _ProjectFolderDetailPageState extends State<ProjectFolderDetailPage> {
   }
 
   Future<void> _addFolder() async {
-    final result = await _projectFolderDialog(context);
+    final result = await _projectItemDialog(context);
     if (result != null) {
       widget.s.addProjectFolder(
         widget.project,
@@ -5436,6 +5482,10 @@ class _AssistantPageState extends State<AssistantPage> {
         widget.s.addCycleItem(draft.title);
         result = 'Aggiunto a Inbox.';
         break;
+      case AssistantActionType.todayTask:
+        widget.s.addTask(draft.title);
+        result = 'Aggiunto alle attività di oggi.';
+        break;
       case AssistantActionType.calendar:
         final date = draft.date;
         if (date == null) {
@@ -5504,12 +5554,14 @@ class _AssistantPageState extends State<AssistantPage> {
 
   String _actionLabel(AssistantActionDraft draft) => switch (draft.type) {
     AssistantActionType.inbox => 'Aggiungi a Inbox',
+    AssistantActionType.todayTask => 'Aggiungi a Oggi',
     AssistantActionType.calendar => 'Programma nel calendario',
     AssistantActionType.projectTask => 'Aggiungi al progetto',
   };
 
   String _destinationLabel(AssistantActionDraft draft) => switch (draft.type) {
     AssistantActionType.inbox => 'Inbox',
+    AssistantActionType.todayTask => 'Attività di Oggi',
     AssistantActionType.calendar =>
       draft.date == null ? 'Calendario' : 'Calendario · ${_date(draft.date!)}',
     AssistantActionType.projectTask =>
@@ -5525,6 +5577,7 @@ class _AssistantPageState extends State<AssistantPage> {
         : 'Aggiungi preparare il preventivo al progetto ${widget.s.projects.first.title}';
     final examples = <String>[
       'Aggiungi comprare il latte in Inbox',
+      'Aggiungi fare la spesa ad Oggi',
       'Programma dentista domani nel calendario',
     ];
     if (projectExample != null) examples.insert(1, projectExample);

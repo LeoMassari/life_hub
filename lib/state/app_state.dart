@@ -621,13 +621,14 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
-  void addProject(String title) {
-    projects.add(ProjectItem(id: _id(), title: title));
+  void addProject(String title, {String? emoji}) {
+    projects.add(ProjectItem(id: _id(), title: title, emoji: emoji));
     _changed();
   }
 
-  void updateProject(ProjectItem project, String title) {
+  void updateProject(ProjectItem project, String title, {String? emoji}) {
     project.title = title;
+    project.emoji = emoji;
     _changed();
   }
 

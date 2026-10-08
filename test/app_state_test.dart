@@ -72,7 +72,7 @@ void main() {
     state.reorderBooks(1, 0);
     state.addCycleItem('Organizzare il viaggio');
     state.addCalendarItem('Dentista', DateTime(2026, 9, 12));
-    state.addProject('Casa');
+    state.addProject('Casa', emoji: '🏠');
     state.addProjectTask(
       state.projects.first,
       'Chiedere un preventivo',
@@ -197,7 +197,7 @@ void main() {
     final state = AppState(store);
     await state.init();
 
-    state.addProject('Casa');
+    state.addProject('Casa', emoji: '🏠');
     final project = state.projects.single;
     state.addProjectTask(project, 'Scegliere le luci', null, priority: 2);
     state.addProjectTask(project, 'Misurare la stanza', null, priority: 1);
@@ -217,6 +217,7 @@ void main() {
     await restored.init();
     final restoredFolder = restored.projects.single.folders.single;
 
+    expect(restored.projects.single.emoji, '🏠');
     expect(restoredFolder.emoji, '🛋️');
     expect(
       restoredFolder.tasks.map((task) => task.priority),

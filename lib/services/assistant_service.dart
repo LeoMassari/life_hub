@@ -1,4 +1,4 @@
-enum AssistantActionType { inbox, projectTask, calendar }
+enum AssistantActionType { inbox, todayTask, projectTask, calendar }
 
 class AssistantProjectReference {
   const AssistantProjectReference({
@@ -46,6 +46,9 @@ class LocalAssistantService {
     final mentionsInbox = RegExp(
       r"\b(?:inbox|posta in arrivo)\b",
     ).hasMatch(normalized);
+    final mentionsToday = RegExp(
+      r"\b(?:in|a|ad|alle|nelle)\s+(?:attivit[aà]\s+(?:di\s+)?)?oggi\b",
+    ).hasMatch(normalized);
     final mentionsCalendar =
         normalized.contains('calendario') ||
         normalized.startsWith('programma ') ||
@@ -57,6 +60,8 @@ class LocalAssistantService {
         ? AssistantActionType.inbox
         : mentionsCalendar && date != null
         ? AssistantActionType.calendar
+        : mentionsToday
+        ? AssistantActionType.todayTask
         : null;
     if (type == null) return null;
 
@@ -139,18 +144,36 @@ class LocalAssistantService {
     final normalizedTitle = _normalize(title);
     final markers = [
       ' in inbox',
+      ' a inbox',
+      ' ad inbox',
+      ' in posta in arrivo',
+      ' a posta in arrivo',
+      ' ad posta in arrivo',
       " nell'inbox",
       ' nell’inbox',
       " all'inbox",
       ' all’inbox',
+      ' in oggi',
+      ' a oggi',
+      ' ad oggi',
+      ' nelle attivita di oggi',
+      ' nelle attività di oggi',
+      ' alle attivita di oggi',
+      ' alle attività di oggi',
       ' nel progetto ',
       ' al progetto ',
       ' in progetto ',
+      ' a progetto ',
+      ' ad progetto ',
       ' sul calendario',
       ' nel calendario',
       ' in calendario',
+      ' a calendario',
+      ' ad calendario',
       ' nella cartella ',
       ' in cartella ',
+      ' a cartella ',
+      ' ad cartella ',
     ];
     var end = title.length;
     for (final marker in markers) {

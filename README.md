@@ -35,14 +35,15 @@ livello e le attività concluse vengono raccolte in fondo alla pagina. Il tasto
 sezione delle completate senza eliminare i dati.
 
 Da Inbox il pulsante **Smista** trasferisce un elemento in un progetto o in una
-sottocartella. L'Assistente trasforma comandi semplici in anteprime confermabili
-per Inbox, Progetti e Calendario; la progettazione del collegamento AI sicuro è
+sottocartella. L'Assistente, raggiungibile anche dal tasto in cima a **Oggi**,
+trasforma comandi semplici in anteprime confermabili per Oggi, Inbox, Progetti e
+Calendario; la progettazione del collegamento AI sicuro e dei comandi vocali è
 descritta in [docs/ai_assistant.md](docs/ai_assistant.md).
 
-Per cambiare l'icona di una cartella, apri il menu con i tre puntini accanto alla
-cartella, scegli **Rinomina**, quindi seleziona una delle emoji proposte oppure
-scrivine una nel campo **Icona o emoji**. Lasciando il campo vuoto viene usata
-l'icona predefinita della cartella.
+Per cambiare l'icona di un progetto, di una cartella o di una sottocartella,
+apri il relativo menu con i tre puntini e scegli **Modifica nome e icona**.
+Seleziona una delle emoji proposte oppure scrivine una nel campo **Icona o
+emoji**. Lasciando il campo vuoto viene usata l'icona predefinita.
 
 La personalizzazione comprende tema chiaro/scuro, colore principale, sfondo
 scelto dal dispositivo e fino a quattro widget fotografici nella pagina Oggi.

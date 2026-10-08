@@ -5,6 +5,15 @@ Ogni aggiornamento completato produce due archivi nella cartella `releases/`:
 - `life_hub-source-vX.Y.Z.zip`: progetto Flutter completo, senza cronologia Git o file temporanei;
 - `life_hub-web-vX.Y.Z.zip`: applicazione web compilata, pronta per essere pubblicata su un servizio di hosting.
 
+## 0.14.0
+
+- collegamento rapido all'Assistente AI in cima alla pagina Oggi;
+- nuovo comando dell'Assistente per aggiungere direttamente attività a Oggi;
+- riconoscimento delle preposizioni `in`, `a` e `ad` nelle destinazioni;
+- editor unificato di nome e icona per progetti, cartelle e sottocartelle;
+- icona o emoji personalizzata salvata anche sul progetto e sincronizzata con gli altri dati;
+- progettazione della futura dettatura vocale con conferma prima di ogni azione.
+
 ## 0.13.0
 
 - pulsante Smista in Inbox per trasferire un elemento in un progetto o in una sottocartella;
