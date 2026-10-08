@@ -262,6 +262,36 @@ void main() {
     expect(restoredChild.tasks.map((task) => task.priority), [1, 2]);
   });
 
+  test('smista un elemento Inbox in una cartella di progetto', () async {
+    final store = MemoryStore();
+    final state = AppState(store);
+    await state.init();
+
+    state.addCycleItem('Comprare la lampada');
+    state.addProject('Casa');
+    final project = state.projects.single;
+    final folder = state.addProjectFolder(project, 'Soggiorno');
+    state.sortCycleItemToProject(
+      state.cycleItems.single,
+      project,
+      folder: folder,
+      priority: 1,
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(state.cycleItems, isEmpty);
+    expect(folder.tasks.single.title, 'Comprare la lampada');
+    expect(folder.tasks.single.priority, 1);
+
+    final restored = AppState(store);
+    await restored.init();
+    expect(restored.cycleItems, isEmpty);
+    expect(
+      restored.projects.single.folders.single.tasks.single.title,
+      'Comprare la lampada',
+    );
+  });
+
   test('al cambio giorno recupera le incompiute e carica domani', () async {
     final store = MemoryStore()
       ..value = {

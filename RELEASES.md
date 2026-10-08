@@ -5,6 +5,17 @@ Ogni aggiornamento completato produce due archivi nella cartella `releases/`:
 - `life_hub-source-vX.Y.Z.zip`: progetto Flutter completo, senza cronologia Git o file temporanei;
 - `life_hub-web-vX.Y.Z.zip`: applicazione web compilata, pronta per essere pubblicata su un servizio di hosting.
 
+## 0.13.0
+
+- pulsante Smista in Inbox per trasferire un elemento in un progetto o in una sottocartella;
+- assegnazione automatica della priorità quando un elemento viene smistato;
+- cestino diretto al posto del menu a tre puntini sulle attività completate;
+- ripristino del menu completo soltanto dopo aver tolto la spunta;
+- nuova pagina Assistente AI con interpretazione locale, anteprima e conferma;
+- comandi semplici per Inbox, progetti, sottocartelle e calendario;
+- architettura documentata per collegare in futuro un modello tramite backend sicuro;
+- nessuna chiave AI inserita nell'app o nella build web pubblica.
+
 ## 0.12.0
 
 - ordinamento manuale delle attività tramite pulsanti su e giù;
