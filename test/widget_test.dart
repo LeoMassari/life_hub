@@ -38,6 +38,7 @@ void main() {
     expect(find.text('Alimentazione'), findsOneWidget);
     expect(find.text('Studio'), findsOneWidget);
     expect(find.text('Inbox'), findsOneWidget);
+    expect(find.text('Assistente'), findsOneWidget);
     expect(find.text('Calendario'), findsOneWidget);
     expect(find.text('Routine'), findsOneWidget);
     expect(find.text('Check lists'), findsOneWidget);
@@ -288,6 +289,21 @@ void main() {
     );
     expect(find.text('Attività completate'), findsOneWidget);
     expect(find.text('Già fatta'), findsOneWidget);
+    final completedTile = find.ancestor(
+      of: find.text('Già fatta'),
+      matching: find.byType(ListTile),
+    );
+    expect(
+      find.descendant(
+        of: completedTile,
+        matching: find.byTooltip('Elimina attività completata'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: completedTile, matching: find.byTooltip('Azioni')),
+      findsNothing,
+    );
     await tester.tap(find.text('Modifica'));
     await tester.pumpAndSettle();
     await tester.tap(find.byType(Switch));
@@ -297,6 +313,70 @@ void main() {
 
     expect(find.text('Attività completate'), findsNothing);
     expect(find.text('Già fatta'), findsNothing);
+  });
+
+  testWidgets('smista un elemento Inbox dentro un progetto', (tester) async {
+    final store = MemoryStore()
+      ..value = {
+        'cycleItems': [
+          {'id': 'inbox-1', 'title': 'Comprare la lampada'},
+        ],
+        'projects': [
+          {
+            'id': 'project-1',
+            'title': 'Casa',
+            'tasks': <Map<String, dynamic>>[],
+            'folders': <Map<String, dynamic>>[],
+          },
+        ],
+      };
+    await tester.pumpWidget(LifeHubApp(store: store));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Altro'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Inbox'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Smista'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Smista in un progetto'), findsOneWidget);
+    expect(find.text('Casa'), findsOneWidget);
+    await tester.tap(find.text('Smista').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Comprare la lampada'), findsNothing);
+    expect(
+      store.value?['projects']?[0]['tasks']?[0]['title'],
+      'Comprare la lampada',
+    );
+  });
+
+  testWidgets('l’Assistente crea un elemento Inbox dopo la conferma', (
+    tester,
+  ) async {
+    final store = MemoryStore();
+    await tester.pumpWidget(LifeHubApp(store: store));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Altro'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Assistente'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Assistente AI'), findsOneWidget);
+    await tester.enterText(
+      find.byType(TextField).first,
+      'Aggiungi comprare il latte in Inbox',
+    );
+    await tester.tap(find.text('Interpreta'));
+    await tester.pumpAndSettle();
+    expect(find.text('Anteprima'), findsOneWidget);
+    expect(find.text('Aggiungi a Inbox'), findsOneWidget);
+
+    await tester.tap(find.text('Aggiungi a Inbox'));
+    await tester.pumpAndSettle();
+    expect(store.value?['cycleItems']?[0]['title'], 'comprare il latte');
   });
 
   testWidgets('aggiunge nome e orario alle attività di oggi', (tester) async {

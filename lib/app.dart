@@ -7,6 +7,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:image_picker/image_picker.dart';
 import 'data/local_store.dart';
 import 'models/models.dart';
+import 'services/assistant_service.dart';
 import 'state/app_state.dart';
 
 class LifeHubApp extends StatefulWidget {
@@ -174,6 +175,7 @@ enum HubPage {
   calendar,
   routine,
   checklists,
+  assistant,
   settings,
 }
 
@@ -224,6 +226,7 @@ class _LifeHubShellState extends State<LifeHubShell> {
     HubPage.calendar => 'calendar',
     HubPage.routine => 'routine',
     HubPage.checklists => 'checklists',
+    HubPage.assistant => 'assistant',
     HubPage.settings => 'settings',
   };
 
@@ -249,6 +252,7 @@ class _LifeHubShellState extends State<LifeHubShell> {
     HubPage.calendar => CalendarPage(widget.state),
     HubPage.routine => RoutinePage(widget.state),
     HubPage.checklists => ChecklistsPage(widget.state),
+    HubPage.assistant => AssistantPage(widget.state),
     HubPage.settings => SettingsPage(
       widget.state,
       cloudEmail: widget.cloudEmail,
@@ -285,46 +289,58 @@ class _LifeHubShellState extends State<LifeHubShell> {
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 8),
-              _MoreMenuTile(
-                page: HubPage.training,
-                icon: Icons.fitness_center,
-                title: 'Allenamento',
-              ),
-              _MoreMenuTile(
-                page: HubPage.nutrition,
-                icon: Icons.restaurant_outlined,
-                title: 'Alimentazione',
-              ),
-              _MoreMenuTile(
-                page: HubPage.study,
-                icon: Icons.menu_book_outlined,
-                title: 'Studio',
-              ),
-              _MoreMenuTile(
-                page: HubPage.cycles,
-                icon: Icons.inbox_outlined,
-                title: 'Inbox',
-              ),
-              _MoreMenuTile(
-                page: HubPage.calendar,
-                icon: Icons.calendar_month_outlined,
-                title: 'Calendario',
-              ),
-              _MoreMenuTile(
-                page: HubPage.routine,
-                icon: Icons.repeat,
-                title: 'Routine',
-              ),
-              _MoreMenuTile(
-                page: HubPage.checklists,
-                icon: Icons.checklist_outlined,
-                title: 'Check lists',
-              ),
-              const Divider(),
-              _MoreMenuTile(
-                page: HubPage.settings,
-                icon: Icons.settings_outlined,
-                title: 'Impostazioni',
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: const [
+                    _MoreMenuTile(
+                      page: HubPage.training,
+                      icon: Icons.fitness_center,
+                      title: 'Allenamento',
+                    ),
+                    _MoreMenuTile(
+                      page: HubPage.nutrition,
+                      icon: Icons.restaurant_outlined,
+                      title: 'Alimentazione',
+                    ),
+                    _MoreMenuTile(
+                      page: HubPage.study,
+                      icon: Icons.menu_book_outlined,
+                      title: 'Studio',
+                    ),
+                    _MoreMenuTile(
+                      page: HubPage.cycles,
+                      icon: Icons.inbox_outlined,
+                      title: 'Inbox',
+                    ),
+                    _MoreMenuTile(
+                      page: HubPage.assistant,
+                      icon: Icons.auto_awesome_outlined,
+                      title: 'Assistente',
+                    ),
+                    _MoreMenuTile(
+                      page: HubPage.calendar,
+                      icon: Icons.calendar_month_outlined,
+                      title: 'Calendario',
+                    ),
+                    _MoreMenuTile(
+                      page: HubPage.routine,
+                      icon: Icons.repeat,
+                      title: 'Routine',
+                    ),
+                    _MoreMenuTile(
+                      page: HubPage.checklists,
+                      icon: Icons.checklist_outlined,
+                      title: 'Check lists',
+                    ),
+                    Divider(),
+                    _MoreMenuTile(
+                      page: HubPage.settings,
+                      icon: Icons.settings_outlined,
+                      title: 'Impostazioni',
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -3206,6 +3222,127 @@ class StudyPage extends StatelessWidget {
   );
 }
 
+typedef _InboxDestination = ({ProjectItem project, ProjectFolder? folder});
+
+Future<_InboxDestination?> _inboxDestinationDialog(
+  BuildContext context,
+  AppState state,
+  CycleItem item,
+) async {
+  if (state.projects.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Crea prima un progetto in cui smistare l’elemento.'),
+      ),
+    );
+    return null;
+  }
+  var selectedProject = state.projects.first;
+  const noFolder = '__root__';
+  var selectedFolderId = noFolder;
+  return showDialog<_InboxDestination>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) {
+        final folderOptions = _projectFolderOptions(selectedProject);
+        return AlertDialog(
+          title: const Text('Smista in un progetto'),
+          content: SizedBox(
+            width: 440,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedProject.id,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Progetto',
+                    prefixIcon: Icon(Icons.folder_outlined),
+                  ),
+                  items: state.projects
+                      .map(
+                        (project) => DropdownMenuItem(
+                          value: project.id,
+                          child: Text(project.title),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setDialogState(() {
+                      selectedProject = state.projects.firstWhere(
+                        (project) => project.id == value,
+                      );
+                      selectedFolderId = noFolder;
+                    });
+                  },
+                ),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  key: ValueKey(selectedProject.id),
+                  initialValue: selectedFolderId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Dove',
+                    prefixIcon: Icon(Icons.drive_file_move_outline),
+                  ),
+                  items: [
+                    const DropdownMenuItem(
+                      value: noFolder,
+                      child: Text('Senza cartella'),
+                    ),
+                    ...folderOptions.map(
+                      (option) => DropdownMenuItem(
+                        value: option.folder.id,
+                        child: Text(
+                          option.path,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setDialogState(() => selectedFolderId = value);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annulla'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final folder = folderOptions
+                    .where((option) => option.folder.id == selectedFolderId)
+                    .map((option) => option.folder)
+                    .firstOrNull;
+                Navigator.pop(context, (
+                  project: selectedProject,
+                  folder: folder,
+                ));
+              },
+              child: const Text('Smista'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
 class CyclesPage extends StatelessWidget {
   const CyclesPage(this.s, {super.key});
 
@@ -3247,28 +3384,63 @@ class CyclesPage extends StatelessWidget {
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            IconButton(
-                              tooltip: 'Modifica',
-                              icon: const Icon(Icons.edit_outlined),
+                            FilledButton.tonalIcon(
+                              icon: const Icon(Icons.outbox_outlined),
+                              label: const Text('Smista'),
                               onPressed: () async {
-                                final title = await _textDialog(
-                                  context,
-                                  'Modifica elemento',
-                                  initialValue: item.title,
+                                final destination =
+                                    await _inboxDestinationDialog(
+                                      context,
+                                      s,
+                                      item,
+                                    );
+                                if (destination == null) return;
+                                final tasks =
+                                    destination.folder?.tasks ??
+                                    destination.project.tasks;
+                                s.sortCycleItemToProject(
+                                  item,
+                                  destination.project,
+                                  folder: destination.folder,
+                                  priority: _nextProjectTaskPriority(tasks),
                                 );
-                                if (title?.isNotEmpty == true) {
-                                  s.updateCycleItem(item, title!);
-                                }
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Elemento spostato in “${destination.project.title}”.',
+                                    ),
+                                  ),
+                                );
                               },
                             ),
-                            IconButton(
-                              tooltip: 'Elimina',
-                              icon: const Icon(Icons.delete_outline),
-                              onPressed: () async {
-                                if (await _confirmDelete(context, item.title)) {
+                            PopupMenuButton<String>(
+                              tooltip: 'Altre azioni',
+                              onSelected: (value) async {
+                                if (value == 'edit') {
+                                  final title = await _textDialog(
+                                    context,
+                                    'Modifica elemento',
+                                    initialValue: item.title,
+                                  );
+                                  if (title?.isNotEmpty == true) {
+                                    s.updateCycleItem(item, title!);
+                                  }
+                                } else if (value == 'delete' &&
+                                    await _confirmDelete(context, item.title)) {
                                   s.removeCycleItem(item);
                                 }
                               },
+                              itemBuilder: (context) => const [
+                                PopupMenuItem(
+                                  value: 'edit',
+                                  child: Text('Modifica'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text('Elimina'),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -4397,89 +4569,100 @@ class _ProjectTaskTile extends StatelessWidget {
                 value: task.done,
                 onChanged: (_) => state.toggleProjectTask(task),
               ),
-              PopupMenuButton<_ProjectTaskAction>(
-                tooltip: 'Azioni',
-                icon: const Icon(Icons.more_vert),
-                onSelected: (action) async {
-                  switch (action) {
-                    case _ProjectTaskAction.schedule:
-                      await _scheduleProjectTask(context, state, task);
-                      break;
-                    case _ProjectTaskAction.move:
-                      await _moveProjectTasks(context, state, project, [
-                        task,
-                      ], currentFolder: currentFolder);
-                      break;
-                    case _ProjectTaskAction.edit:
-                      final result = await _projectTaskDialog(
-                        context,
-                        project: project,
-                        currentFolder: currentFolder,
-                        task: task,
-                      );
-                      if (result != null) {
-                        state.updateProjectTask(
+              if (task.done)
+                IconButton(
+                  tooltip: 'Elimina attività completata',
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () async {
+                    if (await _confirmDelete(context, task.title)) {
+                      state.removeProjectTask(project, task);
+                    }
+                  },
+                )
+              else
+                PopupMenuButton<_ProjectTaskAction>(
+                  tooltip: 'Azioni',
+                  icon: const Icon(Icons.more_vert),
+                  onSelected: (action) async {
+                    switch (action) {
+                      case _ProjectTaskAction.schedule:
+                        await _scheduleProjectTask(context, state, task);
+                        break;
+                      case _ProjectTaskAction.move:
+                        await _moveProjectTasks(context, state, project, [
                           task,
-                          result.title,
-                          result.deadline,
-                          priority: result.priority,
+                        ], currentFolder: currentFolder);
+                        break;
+                      case _ProjectTaskAction.edit:
+                        final result = await _projectTaskDialog(
+                          context,
+                          project: project,
+                          currentFolder: currentFolder,
+                          task: task,
                         );
-                        if (!identical(result.folder, currentFolder)) {
-                          state.moveProjectTask(project, task, result.folder);
+                        if (result != null) {
+                          state.updateProjectTask(
+                            task,
+                            result.title,
+                            result.deadline,
+                            priority: result.priority,
+                          );
+                          if (!identical(result.folder, currentFolder)) {
+                            state.moveProjectTask(project, task, result.folder);
+                          }
                         }
-                      }
-                      break;
-                    case _ProjectTaskAction.delete:
-                      if (await _confirmDelete(context, task.title)) {
-                        state.removeProjectTask(project, task);
-                      }
-                      break;
-                  }
-                },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(
-                    value: _ProjectTaskAction.schedule,
-                    child: Row(
-                      children: [
-                        Icon(Icons.event_available_outlined),
-                        SizedBox(width: 12),
-                        Text('Programma'),
-                      ],
+                        break;
+                      case _ProjectTaskAction.delete:
+                        if (await _confirmDelete(context, task.title)) {
+                          state.removeProjectTask(project, task);
+                        }
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: _ProjectTaskAction.schedule,
+                      child: Row(
+                        children: [
+                          Icon(Icons.event_available_outlined),
+                          SizedBox(width: 12),
+                          Text('Programma'),
+                        ],
+                      ),
                     ),
-                  ),
-                  PopupMenuItem(
-                    value: _ProjectTaskAction.move,
-                    child: Row(
-                      children: [
-                        Icon(Icons.drive_file_move_outline),
-                        SizedBox(width: 12),
-                        Text('Sposta in'),
-                      ],
+                    PopupMenuItem(
+                      value: _ProjectTaskAction.move,
+                      child: Row(
+                        children: [
+                          Icon(Icons.drive_file_move_outline),
+                          SizedBox(width: 12),
+                          Text('Sposta in'),
+                        ],
+                      ),
                     ),
-                  ),
-                  PopupMenuDivider(),
-                  PopupMenuItem(
-                    value: _ProjectTaskAction.edit,
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit_outlined),
-                        SizedBox(width: 12),
-                        Text('Modifica'),
-                      ],
+                    PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: _ProjectTaskAction.edit,
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined),
+                          SizedBox(width: 12),
+                          Text('Modifica'),
+                        ],
+                      ),
                     ),
-                  ),
-                  PopupMenuItem(
-                    value: _ProjectTaskAction.delete,
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete_outline),
-                        SizedBox(width: 12),
-                        Text('Elimina'),
-                      ],
+                    PopupMenuItem(
+                      value: _ProjectTaskAction.delete,
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline),
+                          SizedBox(width: 12),
+                          Text('Elimina'),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
             ],
           ),
   );
@@ -5195,6 +5378,258 @@ class ChecklistsPage extends StatelessWidget {
       ),
     ],
   );
+}
+
+class AssistantPage extends StatefulWidget {
+  const AssistantPage(this.s, {super.key});
+
+  final AppState s;
+
+  @override
+  State<AssistantPage> createState() => _AssistantPageState();
+}
+
+class _AssistantPageState extends State<AssistantPage> {
+  final _controller = TextEditingController();
+  static const _service = LocalAssistantService();
+  AssistantActionDraft? _draft;
+  String? _error;
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  List<AssistantProjectReference> get _projectReferences => widget.s.projects
+      .map(
+        (project) => AssistantProjectReference(
+          projectName: project.title,
+          folderPaths: _projectFolderOptions(
+            project,
+          ).map((option) => option.path).toList(),
+        ),
+      )
+      .toList();
+
+  void _analyze() {
+    final draft = _service.interpret(
+      _controller.text,
+      projects: _projectReferences,
+    );
+    setState(() {
+      _draft = draft;
+      _error = draft == null
+          ? 'Non ho riconosciuto il comando. Prova uno degli esempi qui sotto.'
+          : null;
+    });
+  }
+
+  Future<void> _applyDraft() async {
+    final draft = _draft;
+    if (draft == null || _saving) return;
+    setState(() => _saving = true);
+    String result;
+    switch (draft.type) {
+      case AssistantActionType.inbox:
+        widget.s.addCycleItem(draft.title);
+        result = 'Aggiunto a Inbox.';
+        break;
+      case AssistantActionType.calendar:
+        final date = draft.date;
+        if (date == null) {
+          setState(() {
+            _saving = false;
+            _error = 'Indica una data, per esempio “domani” o “15/10/2026”.';
+          });
+          return;
+        }
+        widget.s.addCalendarItem(draft.title, date);
+        result = 'Aggiunto al calendario per il ${_date(date)}.';
+        break;
+      case AssistantActionType.projectTask:
+        final project = widget.s.projects
+            .where(
+              (project) =>
+                  project.title.toLowerCase() ==
+                  draft.projectName?.toLowerCase(),
+            )
+            .firstOrNull;
+        if (project == null) {
+          setState(() {
+            _saving = false;
+            _error = 'Il progetto indicato non esiste più.';
+          });
+          return;
+        }
+        final folder = draft.folderPath == null
+            ? null
+            : _projectFolderOptions(project)
+                  .where((option) => option.path == draft.folderPath)
+                  .map((option) => option.folder)
+                  .firstOrNull;
+        final tasks = folder?.tasks ?? project.tasks;
+        final priority = _nextProjectTaskPriority(tasks);
+        final task = folder == null
+            ? widget.s.addProjectTask(
+                project,
+                draft.title,
+                draft.date,
+                priority: priority,
+              )
+            : widget.s.addProjectFolderTask(
+                folder,
+                draft.title,
+                draft.date,
+                priority: priority,
+              );
+        if (draft.date != null) {
+          widget.s.scheduleProjectTask(task, draft.date!);
+        }
+        result = folder == null
+            ? 'Attività aggiunta al progetto “${project.title}”.'
+            : 'Attività aggiunta in “${draft.folderPath}”.';
+        break;
+    }
+    if (!mounted) return;
+    _controller.clear();
+    setState(() {
+      _saving = false;
+      _draft = null;
+      _error = null;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result)));
+  }
+
+  String _actionLabel(AssistantActionDraft draft) => switch (draft.type) {
+    AssistantActionType.inbox => 'Aggiungi a Inbox',
+    AssistantActionType.calendar => 'Programma nel calendario',
+    AssistantActionType.projectTask => 'Aggiungi al progetto',
+  };
+
+  String _destinationLabel(AssistantActionDraft draft) => switch (draft.type) {
+    AssistantActionType.inbox => 'Inbox',
+    AssistantActionType.calendar =>
+      draft.date == null ? 'Calendario' : 'Calendario · ${_date(draft.date!)}',
+    AssistantActionType.projectTask =>
+      draft.folderPath == null
+          ? 'Progetto ${draft.projectName}'
+          : 'Progetto ${draft.projectName} · ${draft.folderPath}',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final projectExample = widget.s.projects.isEmpty
+        ? null
+        : 'Aggiungi preparare il preventivo al progetto ${widget.s.projects.first.title}';
+    final examples = <String>[
+      'Aggiungi comprare il latte in Inbox',
+      'Programma dentista domani nel calendario',
+    ];
+    if (projectExample != null) examples.insert(1, projectExample);
+    return PageBody(
+      title: 'Assistente AI',
+      subtitle: 'Trasforma una frase in un’azione, sempre con la tua conferma',
+      state: widget.s,
+      pageId: 'assistant',
+      children: [
+        Section(
+          title: 'Nuovo comando',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: _controller,
+                minLines: 2,
+                maxLines: 4,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _analyze(),
+                decoration: const InputDecoration(
+                  hintText: 'Es. Aggiungi comprare il latte in Inbox',
+                  prefixIcon: Icon(Icons.auto_awesome_outlined),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _analyze,
+                icon: const Icon(Icons.psychology_alt_outlined),
+                label: const Text('Interpreta'),
+              ),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    _error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+              if (_draft case final draft?) ...[
+                const SizedBox(height: 18),
+                Card(
+                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Anteprima',
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                        const SizedBox(height: 10),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.auto_awesome),
+                          title: Text(draft.title),
+                          subtitle: Text(_destinationLabel(draft)),
+                        ),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: FilledButton.icon(
+                            onPressed: _saving ? null : _applyDraft,
+                            icon: const Icon(Icons.check),
+                            label: Text(_actionLabel(draft)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 14),
+              Text(
+                'Prima versione locale: il comando viene interpretato sul dispositivo e nessun testo viene inviato a servizi esterni. Il collegamento a un modello AI sarà aggiunto tramite un backend protetto.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+        Section(
+          title: 'Prova un esempio',
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: examples
+                .map(
+                  (example) => ActionChip(
+                    avatar: const Icon(Icons.bolt_outlined, size: 18),
+                    label: Text(example),
+                    onPressed: () {
+                      _controller.text = example;
+                      _analyze();
+                    },
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class SettingsPage extends StatelessWidget {

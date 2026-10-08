@@ -20,7 +20,8 @@ Scegli Chrome per il web, Windows per il desktop oppure un emulatore Android. Il
 - `lib/app.dart`: navigazione responsive e pagine
 
 Le aree principali sono Oggi, Finanze, Progetti e Scadenze. Il menu **Altro**
-raccoglie Allenamento, Alimentazione, Studio, Inbox, Calendario e Impostazioni.
+raccoglie Allenamento, Alimentazione, Studio, Inbox, Assistente, Calendario e
+Impostazioni.
 
 Gli obiettivi economici si trovano in Finanze. Nei Progetti ogni azione può
 essere programmata nel calendario, ordinata con una priorità numerica oppure
@@ -32,6 +33,16 @@ le frecce su e giù, le cartelle possono contenere sottocartelle senza limiti di
 livello e le attività concluse vengono raccolte in fondo alla pagina. Il tasto
 **Modifica** nelle schede dei progetti permette di mostrare o nascondere la
 sezione delle completate senza eliminare i dati.
+
+Da Inbox il pulsante **Smista** trasferisce un elemento in un progetto o in una
+sottocartella. L'Assistente trasforma comandi semplici in anteprime confermabili
+per Inbox, Progetti e Calendario; la progettazione del collegamento AI sicuro è
+descritta in [docs/ai_assistant.md](docs/ai_assistant.md).
+
+Per cambiare l'icona di una cartella, apri il menu con i tre puntini accanto alla
+cartella, scegli **Rinomina**, quindi seleziona una delle emoji proposte oppure
+scrivine una nel campo **Icona o emoji**. Lasciando il campo vuoto viene usata
+l'icona predefinita della cartella.
 
 La personalizzazione comprende tema chiaro/scuro, colore principale, sfondo
 scelto dal dispositivo e fino a quattro widget fotografici nella pagina Oggi.

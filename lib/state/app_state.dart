@@ -541,6 +541,19 @@ class AppState extends ChangeNotifier {
     _changed();
   }
 
+  ProjectTask sortCycleItemToProject(
+    CycleItem item,
+    ProjectItem project, {
+    ProjectFolder? folder,
+    int? priority,
+  }) {
+    final task = ProjectTask(id: _id(), title: item.title, priority: priority);
+    (folder?.tasks ?? project.tasks).add(task);
+    cycleItems.remove(item);
+    _changed();
+    return task;
+  }
+
   void addCalendarItem(String title, DateTime date) {
     calendarItems.add(CalendarItem(id: _id(), title: title, date: date));
     _changed();
@@ -625,21 +638,21 @@ class AppState extends ChangeNotifier {
     _changed();
   }
 
-  void addProjectTask(
+  ProjectTask addProjectTask(
     ProjectItem project,
     String title,
     DateTime? deadline, {
     int? priority,
   }) {
-    project.tasks.add(
-      ProjectTask(
-        id: _id(),
-        title: title,
-        deadline: deadline,
-        priority: priority,
-      ),
+    final task = ProjectTask(
+      id: _id(),
+      title: title,
+      deadline: deadline,
+      priority: priority,
     );
+    project.tasks.add(task);
     _changed();
+    return task;
   }
 
   ProjectFolder addProjectFolder(
@@ -679,21 +692,21 @@ class AppState extends ChangeNotifier {
     _changed();
   }
 
-  void addProjectFolderTask(
+  ProjectTask addProjectFolderTask(
     ProjectFolder folder,
     String title,
     DateTime? deadline, {
     int? priority,
   }) {
-    folder.tasks.add(
-      ProjectTask(
-        id: _id(),
-        title: title,
-        deadline: deadline,
-        priority: priority,
-      ),
+    final task = ProjectTask(
+      id: _id(),
+      title: title,
+      deadline: deadline,
+      priority: priority,
     );
+    folder.tasks.add(task);
     _changed();
+    return task;
   }
 
   void updateProjectTask(
